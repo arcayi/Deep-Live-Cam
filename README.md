@@ -1,4 +1,5 @@
-Deep-Live-Cam is compatible with webcam, video or an image
+## Deep-Live-Cam-NSFW 
+Deep-Live-Cam-NSFW allows you to create deepfakes Live with a webcam or make deepfakes with a video or an image file. It works with one or two source faces. 
 
 One face replaced with live webcam
 
@@ -12,13 +13,49 @@ Also supports processing of an image or video file with one or two faces in sour
 
 ![DemoTwoFace.png](DemoTwoFace.png)
 
+Choose a face (image with desired face) and the target image/video (image/video in which you want to replace the face) and click on `Start`. Open file explorer and navigate to the directory you select your output to be in. You will find a directory named `<video_title>` where you can see the frames being swapped in realtime. Once the processing is done, it will create the output file. That's it.
 
 ## Disclaimer
 This software is meant to be a productive contribution to the rapidly growing AI-generated media industry. It will help artists with tasks such as animating a custom character or using the character as a model for clothing etc.
 
-The developers of this software are aware of its possible unethical applications and are committed to take preventative measures against them. It has a built-in check which prevents the program from working on inappropriate media including but not limited to nudity, graphic content, sensitive material such as war footage etc. We will continue to develop this project in the positive direction while adhering to law and ethics. This project may be shut down or include watermarks on the output if requested by law.
-
 Users of this software are expected to use this software responsibly while abiding by local laws. If the face of a real person is being used, users are required to get consent from the concerned person and clearly mention that it is a deepfake when posting content online. Developers of this software will not be responsible for actions of end-users.
+
+## How do I use it?
+> Note: When you run this program for the first time, it will download some models ~300MB in size.
+
+Executing `python run.py` command will launch this window:
+
+## For the webcam mode
+
+![gui-demo](instruction.png)
+
+Just follow the clicks on the screenshot
+1. Select a face. You can select an image that has one face or two faces. Left face will be used as face one and right face will be used as face two.
+2. Click live
+3. Wait for a few seconds (it takes a longer time, usually 10 to 30 seconds before the preview shows up)
+
+![demo-gif](demo.gif)
+
+Just use your favorite screencapture to stream like OBS
+> Note: In case you want to change your face, just select another picture, the preview mode will then restart (so just wait a bit).
+
+## One/Two face Option
+
+When you select an image with two faces then both faces can be used to replace on webcam if 'Show both faces' option is turned on and two persons are in frame. Target faces are detected from left of webcam, video or image. 
+
+![DemoTwoFace.gif](DemoTwoFace.gif)
+
+## One/Two face controls for webcam mode, video or image
+You can control how a face/s is replaced on target face\s
+
+![FaceControls.png](FaceControls.png)
+
+1. Show both faces - If you're using an image with two faces, you need to turn on this option to replace both faces in your webcam, video, or image. By default, the left face in the source image is used as "Face 1," and the next face is "Face 2." If your video has two faces and one face goes out of the frame, the left face from the source image will be used because it is "Face 1". If want to use "Face 2" then you can use the "Flip left/right faces" option explained below.
+
+2. Flip left/right faces - When this option is on, it flips the faces of the source image so that the right face becomes "Face 1" and left face becomes "Face 2". You can use this to swap the faces in your webcam, video, or image when there are one or two faces. 
+
+3. Detect face from right - This feature is best used when you have one target face and "Show both faces" option is turned off. By default the target faces are detected from left of webcam, video or image. You might have a picture frame in background to the left of person and this can cause an issue. Turning on this option will replace target "Face 2" first then target "Face 1" second. This allows you to control which detected face gets replaced first. 
+
 
 ## How do I install it?
 
@@ -138,40 +175,6 @@ pip install onnxruntime-openvino==1.15.0
 ```
 python run.py --execution-provider openvino
 ```
-
-## How do I use it?
-> Note: When you run this program for the first time, it will download some models ~300MB in size.
-
-Executing `python run.py` command will launch this window:
-![gui-demo](instruction.png)
-
-Choose a face (image with desired face) and the target image/video (image/video in which you want to replace the face) and click on `Start`. Open file explorer and navigate to the directory you select your output to be in. You will find a directory named `<video_title>` where you can see the frames being swapped in realtime. Once the processing is done, it will create the output file. That's it.
-
-## For the webcam mode
-Just follow the clicks on the screenshot
-1. Select a face. You can select an image that has one face or two faces. Left face will be used as face one and right face will be used as face two.
-2. Click live
-3. Wait for a few seconds (it takes a longer time, usually 10 to 30 seconds before the preview shows up)
-
-![demo-gif](demo.gif)
-
-Just use your favorite screencapture to stream like OBS
-> Note: In case you want to change your face, just select another picture, the preview mode will then restart (so just wait a bit).
-
-When you select an image with two faces then both faces can be used to replace on webcam if 'Show both faces' option is turned on and two persons are in frame. Target faces are detected from left of webcam, video or image. 
-
-![DemoTwoFace.gif](DemoTwoFace.gif)
-
-## One/Two face controls for webcam mode, video or image
-You can control how a face/s is replaced on target face\s
-
-![FaceControls.png](FaceControls.png)
-
-1. Show both faces - If you're using an image with two faces, you need to turn on this option to replace both faces in your webcam, video, or image. By default, the left face in the source image is used as "Face 1," and the next face is "Face 2." If your video has two faces and one face goes out of the frame, the left face from the source image will be used because it is "Face 1". If want to use "Face 2" then you can use the "Flip left/right faces" option explained below.
-
-2. Flip left/right faces - When this option is on, it flips the faces of the source image so that the right face becomes "Face 1" and left face becomes "Face 2". You can use this to swap the faces in your webcam, video, or image when there are one or two faces. 
-
-3. Detect face from right - This feature is best used when you have one target face and "Show both faces" option is turned off. By default the target faces are detected from left of webcam, video or image. You might have a picture frame in background to the left of person and this can cause an issue. Turning on this option will replace target "Face 2" first then target "Face 1" second. This allows you to control which detected face gets replaced first. 
 
 
 Additional command line arguments are given below. To learn out what they do, check [this guide](https://github.com/s0md3v/roop/wiki/Advanced-Options).
