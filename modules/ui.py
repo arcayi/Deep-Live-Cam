@@ -7,7 +7,7 @@ from PIL import Image, ImageOps
 
 import modules.globals
 import modules.metadata
-from modules.face_analyser import get_one_face
+from modules.face_analyser import get_one_face, get_one_face_left, get_one_face_right
 from modules.capturer import get_video_frame, get_video_frame_total
 from modules.processors.frame.core import get_frame_processors_modules
 from modules.utilities import is_image, is_video, resolve_relative_path, has_image_extension
@@ -69,22 +69,34 @@ def create_root(start: Callable[[], None], destroy: Callable[[], None]) -> ctk.C
     select_target_button = ctk.CTkButton(root, text='Select a target', cursor='hand2', command=lambda: select_target_path())
     select_target_button.place(relx=0.6, rely=0.4, relwidth=0.3, relheight=0.1)
 
+    both_faces_value = ctk.BooleanVar(value=modules.globals.both_faces)
+    both_faces_checkbox = ctk.CTkSwitch(root, text='Show both faces', variable=both_faces_value, cursor='hand2', command=lambda: setattr(modules.globals, 'both_faces', not modules.globals.both_faces))
+    both_faces_checkbox.place(relx=0.1, rely=0.55)
+
+    flip_faces_value = ctk.BooleanVar(value=modules.globals.flip_faces)
+    flip_faces_checkbox = ctk.CTkSwitch(root, text='Flip left/right faces', variable=flip_faces_value, cursor='hand2', command=lambda: setattr(modules.globals, 'flip_faces', not modules.globals.flip_faces))
+    flip_faces_checkbox.place(relx=0.1, rely=0.60)
+
     keep_fps_value = ctk.BooleanVar(value=modules.globals.keep_fps)
     keep_fps_checkbox = ctk.CTkSwitch(root, text='Keep fps', variable=keep_fps_value, cursor='hand2', command=lambda: setattr(modules.globals, 'keep_fps', not modules.globals.keep_fps))
-    keep_fps_checkbox.place(relx=0.1, rely=0.6)
+    keep_fps_checkbox.place(relx=0.1, rely=0.65)
 
     keep_frames_value = ctk.BooleanVar(value=modules.globals.keep_frames)
     keep_frames_switch = ctk.CTkSwitch(root, text='Keep frames', variable=keep_frames_value, cursor='hand2', command=lambda: setattr(modules.globals, 'keep_frames', keep_frames_value.get()))
-    keep_frames_switch.place(relx=0.1, rely=0.65)
+    keep_frames_switch.place(relx=0.1, rely=0.70)
 
     # for FRAME PROCESSOR ENHANCER tumbler:
     enhancer_value = ctk.BooleanVar(value=modules.globals.fp_ui['face_enhancer'])
     enhancer_switch = ctk.CTkSwitch(root, text='Face Enhancer', variable=enhancer_value, cursor='hand2', command=lambda: update_tumbler('face_enhancer',enhancer_value.get()))
-    enhancer_switch.place(relx=0.1, rely=0.7)
+    enhancer_switch.place(relx=0.1, rely=0.75)
+
+    detect_face_right_value = ctk.BooleanVar(value=modules.globals.detect_face_right)
+    detect_face_right_checkbox = ctk.CTkSwitch(root, text='Detect face from right', variable=detect_face_right_value, cursor='hand2', command=lambda: setattr(modules.globals, 'detect_face_right', not modules.globals.detect_face_right))
+    detect_face_right_checkbox.place(relx=0.6, rely=0.55)
 
     keep_audio_value = ctk.BooleanVar(value=modules.globals.keep_audio)
     keep_audio_switch = ctk.CTkSwitch(root, text='Keep audio', variable=keep_audio_value, cursor='hand2', command=lambda: setattr(modules.globals, 'keep_audio', keep_audio_value.get()))
-    keep_audio_switch.place(relx=0.6, rely=0.6)
+    keep_audio_switch.place(relx=0.6, rely=0.60)
 
     many_faces_value = ctk.BooleanVar(value=modules.globals.many_faces)
     many_faces_switch = ctk.CTkSwitch(root, text='Many faces', variable=many_faces_value, cursor='hand2', command=lambda: setattr(modules.globals, 'many_faces', many_faces_value.get()))
@@ -92,7 +104,11 @@ def create_root(start: Callable[[], None], destroy: Callable[[], None]) -> ctk.C
 
     nsfw_value = ctk.BooleanVar(value=modules.globals.nsfw_filter)
     nsfw_switch = ctk.CTkSwitch(root, text='NSFW filter', variable=nsfw_value, cursor='hand2', command=lambda: setattr(modules.globals, 'nsfw_filter', nsfw_value.get()))
-    nsfw_switch.place(relx=0.6, rely=0.7)
+    nsfw_switch.place(relx=0.6, rely=0.70)
+
+    show_target_face_box_value = ctk.BooleanVar(value=modules.globals.show_target_face_box)
+    show_target_face_box_checkbox = ctk.CTkSwitch(root, text='Show target face box', variable=show_target_face_box_value, cursor='hand2', command=lambda: setattr(modules.globals, 'show_target_face_box', not modules.globals.show_target_face_box))
+    show_target_face_box_checkbox.place(relx=0.6, rely=0.75)
 
     start_button = ctk.CTkButton(root, text='Start', cursor='hand2', command=lambda: select_output_path(start))
     start_button.place(relx=0.15, rely=0.80, relwidth=0.2, relheight=0.05)
@@ -109,10 +125,10 @@ def create_root(start: Callable[[], None], destroy: Callable[[], None]) -> ctk.C
     status_label = ctk.CTkLabel(root, text=None, justify='center')
     status_label.place(relx=0.1, rely=0.9, relwidth=0.8)
 
-    donate_label = ctk.CTkLabel(root, text='Deep Live Cam', justify='center', cursor='hand2')
+    donate_label = ctk.CTkLabel(root, text='Deep Live Cam - NSFW', justify='center', cursor='hand2')
     donate_label.place(relx=0.1, rely=0.95, relwidth=0.8)
     donate_label.configure(text_color=ctk.ThemeManager.theme.get('URL').get('text_color'))
-    donate_label.bind('<Button>', lambda event: webbrowser.open('https://paypal.me/hacksider'))
+    donate_label.bind('<Button>', lambda event: webbrowser.open('https://buymeacoffee.com/ivideogameboss'))
 
     return root
 
@@ -271,9 +287,25 @@ def update_preview(frame_number: int = 0) -> None:
         temp_frame = get_video_frame(modules.globals.target_path, frame_number)
         if modules.globals.nsfw_filter and check_and_ignore_nsfw(temp_frame):
             return
+        
+        source_image_left = None  # Left source face image
+        source_image_right = None  # Right source face image
+        
+        # Initialize variables for the selected face/s image. 
+        # Source image can have one face or two faces we simply detect face from left of frame
+        # then right of frame. This insures we always have a face to work with
+        if source_image_left is None and modules.globals.source_path:
+            source_image_left = get_one_face_left(cv2.imread(modules.globals.source_path))
+        if source_image_right is None and modules.globals.source_path:
+            source_image_right = get_one_face_right(cv2.imread(modules.globals.source_path))
+
+        # no face found
+        if source_image_left is None:
+            print('No face found in source image')
+            return
+        
         for frame_processor in get_frame_processors_modules(modules.globals.frame_processors):
-            temp_frame = frame_processor.process_frame(
-                get_one_face(cv2.imread(modules.globals.source_path)),
+            temp_frame = frame_processor.process_frame([source_image_left,source_image_right],
                 temp_frame
             )
         image = Image.fromarray(cv2.cvtColor(temp_frame, cv2.COLOR_BGR2RGB))
@@ -301,16 +333,26 @@ def webcam_preview():
 
     frame_processors = get_frame_processors_modules(modules.globals.frame_processors)
 
-    source_image = None  # Initialize variable for the selected face image
+    source_image_left = None  # Left source face image
+    source_image_right = None  # Right source face image
+        
+    # Initialize variables for the selected face/s image. 
+    # Source image can have one face or two faces we simply detect face from left of frame
+    # then right of frame. This insures we always have a face to work with
+    if source_image_left is None and modules.globals.source_path:
+        source_image_left = get_one_face_left(cv2.imread(modules.globals.source_path))
+    if source_image_right is None and modules.globals.source_path:
+        source_image_right = get_one_face_right(cv2.imread(modules.globals.source_path))
+    
+    # no face found
+    if source_image_left is None:
+        print('No face found in source image')
+        return
 
     while camera:
         ret, frame = camera.read()
         if not ret:
             break
-
-        # Select and save face image only once
-        if source_image is None and modules.globals.source_path:
-            source_image = get_one_face(cv2.imread(modules.globals.source_path))
 
         temp_frame = frame.copy()  #Create a copy of the frame
 
@@ -321,7 +363,7 @@ def webcam_preview():
             temp_frame = fit_image_to_size(temp_frame, PREVIEW.winfo_width(), PREVIEW.winfo_height())
 
         for frame_processor in frame_processors:
-            temp_frame = frame_processor.process_frame(source_image, temp_frame)
+            temp_frame = frame_processor.process_frame([source_image_left,source_image_right], temp_frame)
 
         image = cv2.cvtColor(temp_frame, cv2.COLOR_BGR2RGB)  # Convert the image to RGB format to display it with Tkinter
         image = Image.fromarray(image)

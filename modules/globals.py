@@ -30,3 +30,7 @@ log_level = 'error'
 fp_ui: Dict[str, bool] = {}
 camera_input_combobox = None
 webcam_preview_running = False
+both_faces = None
+flip_faces = None
+detect_face_right = None
+show_target_face_box = None
