@@ -63,7 +63,7 @@ def create_root(start: Callable[[], None], destroy: Callable[[], None]) -> ctk.C
     target_label = ctk.CTkLabel(root, text=None)
     target_label.place(relx=0.6, rely=0.08, relwidth=0.3, relheight=0.25)
 
-    select_face_button = ctk.CTkButton(root, text='Select a face', cursor='hand2', command=lambda: select_source_path())
+    select_face_button = ctk.CTkButton(root, text='Select a face/s\n(left face)(right face)', cursor='hand2', command=lambda: select_source_path())
     select_face_button.place(relx=0.1, rely=0.35, relwidth=0.3, relheight=0.1)
 
     select_target_button = ctk.CTkButton(root, text='Select a target', cursor='hand2', command=lambda: select_target_path())
