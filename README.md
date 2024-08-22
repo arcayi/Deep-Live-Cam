@@ -187,6 +187,10 @@ options:
   --keep-audio                                             keep original audio
   --keep-frames                                            keep temporary frames
   --many-faces                                             process every face
+  --both-faces                                             use two faces in source image
+  --flip-faces                                             flip two faces in source image from right to left
+  --detect-face-right                                      detect target face from right of frame
+  --show-target-face-box                                   show target face box
   --nsfw-filter                                            filter the NSFW image or video
   --video-encoder {libx264,libx265,libvpx-vp9}             adjust output video encoder
   --video-quality [0-51]                                   adjust output video quality
