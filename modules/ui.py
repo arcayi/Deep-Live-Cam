@@ -45,7 +45,7 @@ def init(start: Callable[[], None], destroy: Callable[[], None]) -> ctk.CTk:
 
 
 def create_root(start: Callable[[], None], destroy: Callable[[], None]) -> ctk.CTk:
-    global source_label, target_label, status_label
+    global source_label, target_label, status_label,preview_size_var
 
     ctk.deactivate_automatic_dpi_awareness()
     ctk.set_appearance_mode('system')
@@ -118,6 +118,17 @@ def create_root(start: Callable[[], None], destroy: Callable[[], None]) -> ctk.C
 
     preview_button = ctk.CTkButton(root, text='Preview', cursor='hand2', command=lambda: toggle_preview())
     preview_button.place(relx=0.65, rely=0.80, relwidth=0.2, relheight=0.05)
+
+
+    preview_button = ctk.CTkButton(root, text='Preview', cursor='hand2', command=lambda: toggle_preview())
+    preview_button.place(relx=0.65, rely=0.80, relwidth=0.2, relheight=0.05)
+
+    # Add preview size dropdown
+    preview_size_var = ctk.StringVar(value="960x540")
+    preview_size_dropdown = ctk.CTkOptionMenu(root, values=["854x480", "960x540", "1280x720", "1920x1080"],
+                                              variable=preview_size_var,
+                                              command=update_preview_size)
+    preview_size_dropdown.place(relx=0.65, rely=0.86, relwidth=0.2, relheight=0.05)
 
     live_button = ctk.CTkButton(root, text='Live', cursor='hand2', command=lambda: webcam_preview())
     live_button.place(relx=0.40, rely=0.86, relwidth=0.2, relheight=0.05)
@@ -377,3 +388,11 @@ def webcam_preview():
 
     camera.release()
     PREVIEW.withdraw()  # Close preview window when loop is finished
+
+def update_preview_size(*args):
+    global PREVIEW_DEFAULT_WIDTH, PREVIEW_DEFAULT_HEIGHT
+    size = preview_size_var.get().split('x')
+    PREVIEW_DEFAULT_WIDTH = int(size[0])
+    PREVIEW_DEFAULT_HEIGHT = int(size[1])
+    if PREVIEW.state() == 'normal':
+        update_preview()
