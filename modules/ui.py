@@ -58,57 +58,65 @@ def create_root(start: Callable[[], None], destroy: Callable[[], None]) -> ctk.C
     root.protocol('WM_DELETE_WINDOW', lambda: destroy())
 
     source_label = ctk.CTkLabel(root, text=None)
-    source_label.place(relx=0.1, rely=0.1, relwidth=0.3, relheight=0.25)
+    source_label.place(relx=0.1, rely=0.08, relwidth=0.3, relheight=0.25)
 
     target_label = ctk.CTkLabel(root, text=None)
-    target_label.place(relx=0.6, rely=0.1, relwidth=0.3, relheight=0.25)
+    target_label.place(relx=0.6, rely=0.08, relwidth=0.3, relheight=0.25)
 
     select_face_button = ctk.CTkButton(root, text='Select a face', cursor='hand2', command=lambda: select_source_path())
-    select_face_button.place(relx=0.1, rely=0.4, relwidth=0.3, relheight=0.1)
+    select_face_button.place(relx=0.1, rely=0.35, relwidth=0.3, relheight=0.1)
 
     select_target_button = ctk.CTkButton(root, text='Select a target', cursor='hand2', command=lambda: select_target_path())
-    select_target_button.place(relx=0.6, rely=0.4, relwidth=0.3, relheight=0.1)
+    select_target_button.place(relx=0.6, rely=0.35, relwidth=0.3, relheight=0.1)
 
     both_faces_value = ctk.BooleanVar(value=modules.globals.both_faces)
     both_faces_checkbox = ctk.CTkSwitch(root, text='Show both faces', variable=both_faces_value, cursor='hand2', command=lambda: setattr(modules.globals, 'both_faces', not modules.globals.both_faces))
-    both_faces_checkbox.place(relx=0.1, rely=0.55)
+    both_faces_checkbox.place(relx=0.1, rely=0.50)
 
     flip_faces_value = ctk.BooleanVar(value=modules.globals.flip_faces)
     flip_faces_checkbox = ctk.CTkSwitch(root, text='Flip left/right faces', variable=flip_faces_value, cursor='hand2', command=lambda: setattr(modules.globals, 'flip_faces', not modules.globals.flip_faces))
-    flip_faces_checkbox.place(relx=0.1, rely=0.60)
+    flip_faces_checkbox.place(relx=0.1, rely=0.55)
 
-    keep_fps_value = ctk.BooleanVar(value=modules.globals.keep_fps)
-    keep_fps_checkbox = ctk.CTkSwitch(root, text='Keep fps', variable=keep_fps_value, cursor='hand2', command=lambda: setattr(modules.globals, 'keep_fps', not modules.globals.keep_fps))
-    keep_fps_checkbox.place(relx=0.1, rely=0.65)
 
-    keep_frames_value = ctk.BooleanVar(value=modules.globals.keep_frames)
-    keep_frames_switch = ctk.CTkSwitch(root, text='Keep frames', variable=keep_frames_value, cursor='hand2', command=lambda: setattr(modules.globals, 'keep_frames', keep_frames_value.get()))
-    keep_frames_switch.place(relx=0.1, rely=0.70)
+
+    detect_face_right_value = ctk.BooleanVar(value=modules.globals.detect_face_right)
+    detect_face_right_checkbox = ctk.CTkSwitch(root, text='Detect face from right', variable=detect_face_right_value, cursor='hand2', command=lambda: setattr(modules.globals, 'detect_face_right', not modules.globals.detect_face_right))
+    detect_face_right_checkbox.place(relx=0.1, rely=0.60)
+
+    many_faces_value = ctk.BooleanVar(value=modules.globals.many_faces)
+    many_faces_switch = ctk.CTkSwitch(root, text='Many faces', variable=many_faces_value, cursor='hand2', command=lambda: setattr(modules.globals, 'many_faces', many_faces_value.get()))
+    many_faces_switch.place(relx=0.1, rely=0.65)
 
     # for FRAME PROCESSOR ENHANCER tumbler:
     enhancer_value = ctk.BooleanVar(value=modules.globals.fp_ui['face_enhancer'])
     enhancer_switch = ctk.CTkSwitch(root, text='Face Enhancer', variable=enhancer_value, cursor='hand2', command=lambda: update_tumbler('face_enhancer',enhancer_value.get()))
-    enhancer_switch.place(relx=0.1, rely=0.75)
+    enhancer_switch.place(relx=0.1, rely=0.70)
 
-    detect_face_right_value = ctk.BooleanVar(value=modules.globals.detect_face_right)
-    detect_face_right_checkbox = ctk.CTkSwitch(root, text='Detect face from right', variable=detect_face_right_value, cursor='hand2', command=lambda: setattr(modules.globals, 'detect_face_right', not modules.globals.detect_face_right))
-    detect_face_right_checkbox.place(relx=0.6, rely=0.55)
+    show_target_face_box_value = ctk.BooleanVar(value=modules.globals.show_target_face_box)
+    show_target_face_box_checkbox = ctk.CTkSwitch(root, text='Show target face box', variable=show_target_face_box_value, cursor='hand2', command=lambda: setattr(modules.globals, 'show_target_face_box', not modules.globals.show_target_face_box))
+    show_target_face_box_checkbox.place(relx=0.1, rely=0.75)
+
+    live_mirror_value = ctk.BooleanVar(value=modules.globals.live_mirror)
+    live_mirror_checkbox = ctk.CTkSwitch(root, text='Mirror webcam', variable=live_mirror_value, cursor='hand2', command=lambda: setattr(modules.globals, 'live_mirror', not modules.globals.live_mirror))
+    live_mirror_checkbox.place(relx=0.6, rely=0.50)
+
+    keep_fps_value = ctk.BooleanVar(value=modules.globals.keep_fps)
+    keep_fps_checkbox = ctk.CTkSwitch(root, text='Keep fps', variable=keep_fps_value, cursor='hand2', command=lambda: setattr(modules.globals, 'keep_fps', not modules.globals.keep_fps))
+    keep_fps_checkbox.place(relx=0.6, rely=0.55)
 
     keep_audio_value = ctk.BooleanVar(value=modules.globals.keep_audio)
     keep_audio_switch = ctk.CTkSwitch(root, text='Keep audio', variable=keep_audio_value, cursor='hand2', command=lambda: setattr(modules.globals, 'keep_audio', keep_audio_value.get()))
     keep_audio_switch.place(relx=0.6, rely=0.60)
 
-    many_faces_value = ctk.BooleanVar(value=modules.globals.many_faces)
-    many_faces_switch = ctk.CTkSwitch(root, text='Many faces', variable=many_faces_value, cursor='hand2', command=lambda: setattr(modules.globals, 'many_faces', many_faces_value.get()))
-    many_faces_switch.place(relx=0.6, rely=0.65)
+    keep_frames_value = ctk.BooleanVar(value=modules.globals.keep_frames)
+    keep_frames_switch = ctk.CTkSwitch(root, text='Keep frames', variable=keep_frames_value, cursor='hand2', command=lambda: setattr(modules.globals, 'keep_frames', keep_frames_value.get()))
+    keep_frames_switch.place(relx=0.6, rely=0.65)
 
     nsfw_value = ctk.BooleanVar(value=modules.globals.nsfw_filter)
     nsfw_switch = ctk.CTkSwitch(root, text='NSFW filter', variable=nsfw_value, cursor='hand2', command=lambda: setattr(modules.globals, 'nsfw_filter', nsfw_value.get()))
     nsfw_switch.place(relx=0.6, rely=0.70)
 
-    show_target_face_box_value = ctk.BooleanVar(value=modules.globals.show_target_face_box)
-    show_target_face_box_checkbox = ctk.CTkSwitch(root, text='Show target face box', variable=show_target_face_box_value, cursor='hand2', command=lambda: setattr(modules.globals, 'show_target_face_box', not modules.globals.show_target_face_box))
-    show_target_face_box_checkbox.place(relx=0.6, rely=0.75)
+
 
     start_button = ctk.CTkButton(root, text='Start', cursor='hand2', command=lambda: select_output_path(start))
     start_button.place(relx=0.15, rely=0.80, relwidth=0.2, relheight=0.05)
