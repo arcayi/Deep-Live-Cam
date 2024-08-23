@@ -21,6 +21,7 @@ PREVIEW_MAX_HEIGHT = 700
 PREVIEW_MAX_WIDTH  = 1200
 PREVIEW_DEFAULT_WIDTH  = 960
 PREVIEW_DEFAULT_HEIGHT = 540
+BLUR_SIZE=1
 
 RECENT_DIRECTORY_SOURCE = None
 RECENT_DIRECTORY_TARGET = None
@@ -45,7 +46,7 @@ def init(start: Callable[[], None], destroy: Callable[[], None]) -> ctk.CTk:
 
 
 def create_root(start: Callable[[], None], destroy: Callable[[], None]) -> ctk.CTk:
-    global source_label, target_label, status_label,preview_size_var
+    global source_label, target_label, status_label,preview_size_var, mouth_mask_var
 
     ctk.deactivate_automatic_dpi_awareness()
     ctk.set_appearance_mode('system')
@@ -116,10 +117,13 @@ def create_root(start: Callable[[], None], destroy: Callable[[], None]) -> ctk.C
     nsfw_switch = ctk.CTkSwitch(root, text='NSFW filter', variable=nsfw_value, cursor='hand2', command=lambda: setattr(modules.globals, 'nsfw_filter', nsfw_value.get()))
     nsfw_switch.place(relx=0.6, rely=0.70)
 
-
+    mouth_mask_var = ctk.BooleanVar(value=modules.globals.mouth_mask)
+    mouth_mask_switch = ctk.CTkSwitch(root, text='Mouth mask', variable=mouth_mask_var, cursor='hand2', command=lambda: setattr(modules.globals, 'mouth_mask', mouth_mask_var.get()))
+    mouth_mask_switch.place(relx=0.6, rely=0.75)
 
     start_button = ctk.CTkButton(root, text='Start', cursor='hand2', command=lambda: select_output_path(start))
     start_button.place(relx=0.15, rely=0.80, relwidth=0.2, relheight=0.05)
+
 
     stop_button = ctk.CTkButton(root, text='Destroy', cursor='hand2', command=lambda: destroy())
     stop_button.place(relx=0.4, rely=0.80, relwidth=0.2, relheight=0.05)
@@ -144,7 +148,7 @@ def create_root(start: Callable[[], None], destroy: Callable[[], None]) -> ctk.C
     status_label = ctk.CTkLabel(root, text=None, justify='center')
     status_label.place(relx=0.1, rely=0.9, relwidth=0.8)
 
-    donate_label = ctk.CTkLabel(root, text='Deep Live Cam - NSFW', justify='center', cursor='hand2')
+    donate_label = ctk.CTkLabel(root, text='iRoopDeepFaceCam', justify='center', cursor='hand2')
     donate_label.place(relx=0.1, rely=0.95, relwidth=0.8)
     donate_label.configure(text_color=ctk.ThemeManager.theme.get('URL').get('text_color'))
     donate_label.bind('<Button>', lambda event: webbrowser.open('https://buymeacoffee.com/ivideogameboss'))
@@ -404,3 +408,12 @@ def update_preview_size(*args):
     PREVIEW_DEFAULT_HEIGHT = int(size[1])
     if PREVIEW.state() == 'normal':
         update_preview()
+
+def update_blur_size(*args):
+    size = blur_size_var.get()
+    modules.globals.blur_size = int(size)
+
+def update_blur_size_blend(*args):
+    size = blur_size_blend_var.get()
+    modules.globals.blur_size_blend = int(size)
+    

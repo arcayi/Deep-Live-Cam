@@ -34,3 +34,4 @@ both_faces = None
 flip_faces = None
 detect_face_right = None
 show_target_face_box = None
+mouth_mask=False
