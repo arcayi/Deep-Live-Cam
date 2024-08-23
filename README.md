@@ -78,7 +78,7 @@ You can control how a face/s is replaced on target face\s
 -   [ffmpeg](https://www.youtube.com/watch?v=OlNWCpFdVMA) 
 -   [visual studio 2022 runtimes (windows)](https://visualstudio.microsoft.com/visual-cpp-build-tools/)
 #### 2. Clone Repository
-    https://github.com/hacksider/Deep-Live-Cam.git
+    https://github.com/iVideoGameBoss/iRoopDeepFaceCam.git
 
 #### 3. Download Models
 
