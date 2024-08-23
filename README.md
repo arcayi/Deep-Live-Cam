@@ -1,24 +1,34 @@
-## Deep-Live-Cam-NSFW 
-Deep-Live-Cam-NSFW allows you to create deepfakes Live with a webcam or make deepfakes with a video or an image file. It works with one or two source faces. 
+# iRoopDeepFaceCam 
+iRoopDeepFaceCam is based on the original [roop](https://github.com/s0md3v/roop) and builds on top of [Deep-Live-Cam](https://github.com/hacksider/Deep-Live-Cam) which was also based on roop. iRoopDeepFaceCam allows you to make deepfakes with your face via a Live webcam or a video or an image file. You can also use OBS virtual camera to act as a webcam. iRoopDeepFaceCam is unique as it can work with one or two source faces. It also comes with a 'Mouth Mask' mode that allows the mouth to interact with objects.
 
-One face replaced with live webcam
+## One face replaced with live webcam
 
 ![demo-gif](demo.gif)
 
-Two faces replaced on webcam
+## Two faces replaced on webcam
 
 ![DemoTwoFace.gif](DemoTwoFace.gif)
 
-Also supports processing of an image or video file with one or two faces in source image
+## Also supports processing of an image or video file with one or two faces in source image
 
-![DemoTwoFace.png](DemoTwoFace.png)
+![DemoTwoFaceReplace.gif](DemoTwoFaceReplace.gif)
 
 Choose a face (image with desired face) and the target image/video (image/video in which you want to replace the face) and click on `Start`. Open file explorer and navigate to the directory you select your output to be in. You will find a directory named `<video_title>` where you can see the frames being swapped in realtime. Once the processing is done, it will create the output file. That's it.
+
+## Mouth Mask mode allows you to interact with objects live via webcam, video or image
+
+![MouthMask.gif](MouthMask.gif)
 
 ## Disclaimer
 This software is meant to be a productive contribution to the rapidly growing AI-generated media industry. It will help artists with tasks such as animating a custom character or using the character as a model for clothing etc.
 
+The developers of this software are aware of its possible unethical applications and are committed to take preventative measures against them. It has a built-in check which prevents the program from working on inappropriate media including but not limited to nudity, graphic content, sensitive material such as war footage etc. We will continue to develop this project in the positive direction while adhering to law and ethics. This project may be shut down or include watermarks on the output if requested by law.
+
+# ** DO NOT BREAK THE LAW YOU WILL GO TO JAIL!!! **
+
 Users of this software are expected to use this software responsibly while abiding by local laws. If the face of a real person is being used, users are required to get consent from the concerned person and clearly mention that it is a deepfake when posting content online. Developers of this software will not be responsible for actions of end-users.
+
+
 
 ## How do I use it?
 > Note: When you run this program for the first time, it will download some models ~300MB in size.
@@ -27,7 +37,7 @@ Executing `python run.py` command will launch this window:
 
 ## For the webcam mode
 
-![gui-demo](instruction.png)
+![instruction.gif](instruction.gif)
 
 Just follow the clicks on the screenshot
 1. Select a face. You can select an image that has one face or two faces. Left face will be used as face one and right face will be used as face two.
@@ -43,12 +53,12 @@ Just use your favorite screencapture to stream like OBS
 
 When you select an image with two faces then both faces can be used to replace on webcam if 'Show both faces' option is turned on and two persons are in frame. Target faces are detected from left of webcam, video or image. 
 
-![DemoTwoFace.gif](DemoTwoFace.gif)
+![DemoTwoFace.gif](DemoTwoFaceReplace.gif)
 
 ## One/Two face controls for webcam mode, video or image
 You can control how a face/s is replaced on target face\s
 
-![FaceControls.png](FaceControls.png)
+![FaceControls.gif](FaceControls.gif)
 
 1. Show both faces - If you're using an image with two faces, you need to turn on this option to replace both faces in your webcam, video, or image. By default, the left face in the source image is used as "Face 1," and the next face is "Face 2." If your video has two faces and one face goes out of the frame, the left face from the source image will be used because it is "Face 1". If want to use "Face 2" then you can use the "Flip left/right faces" option explained below.
 
@@ -58,7 +68,7 @@ You can control how a face/s is replaced on target face\s
 
 
 ## How do I install it?
-
+### I strongly recommend you check out [Deep-Live-Cam](https://github.com/hacksider/Deep-Live-Cam) as iRoopDeepFaceCam was based on thier original work. Checkout their [issues](https://github.com/hacksider/Deep-Live-Cam/issues) page as they will more then likely have the solution for you 
 
 ### Basic: It is more likely to work on your computer but it will also be very slow. You can follow instructions for the basic install (This usually runs via **CPU**)
 #### 1.Setup your platform
@@ -194,6 +204,7 @@ options:
   --flip-faces                                             flip two faces in source image from right to left
   --detect-face-right                                      detect target face from right of frame
   --show-target-face-box                                   show target face box
+  --mouth-mask                                             show target mouth using mask
   --nsfw-filter                                            filter the NSFW image or video
   --video-encoder {libx264,libx265,libvpx-vp9}             adjust output video encoder
   --video-quality [0-51]                                   adjust output video quality
