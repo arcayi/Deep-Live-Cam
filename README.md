@@ -17,6 +17,12 @@ Choose a face (image with desired face) and the target image/video (image/video 
 
 ## Mouth Mask mode allows you to interact with objects live via webcam, video or image
 
+(watch this video to see how Mouth Mask works)
+
+![MouthMaskDemo.gif](MouthMaskDemo.gif)
+
+You can also enable Mouth Mask to process a video file or an image
+
 ![MouthMask.gif](MouthMask.gif)
 
 ## Disclaimer
