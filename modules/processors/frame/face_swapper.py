@@ -43,9 +43,65 @@ def get_face_swapper() -> Any:
             FACE_SWAPPER = insightface.model_zoo.get_model(model_path, providers=modules.globals.execution_providers)
     return FACE_SWAPPER
 
+def create_face_mask(face: Face, frame: Frame) -> np.ndarray:
+    mask = np.zeros(frame.shape[:2], dtype=np.uint8)
+    landmarks = face.landmark_2d_106
+    if landmarks is not None:
+        # Convert landmarks to int32
+        landmarks = landmarks.astype(np.int32)
+        
+        # Get facial landmark points
+        outline = landmarks[:33]  # Face outline
+        left_eyebrow = landmarks[33:42]  # Left eyebrow
+        right_eyebrow = landmarks[42:51]  # Right eyebrow
+        
+        # Calculate the highest point of eyebrows
+        highest_eyebrow_point = min(np.min(left_eyebrow[:, 1]), np.min(right_eyebrow[:, 1]))
+        
+        # Calculate how much to extend the forehead (e.g., 20% of face height)
+        face_height = np.max(outline[:, 1]) - highest_eyebrow_point
+        forehead_extension = int(face_height * 0.8)
+        
+        # Create points for extended forehead
+        forehead_points = np.array([
+            [landmarks[0, 0], highest_eyebrow_point - forehead_extension],  # Left forehead point
+            [landmarks[16, 0], highest_eyebrow_point - forehead_extension],  # Right forehead point
+        ])
+        
+        # Combine all points
+        all_points = np.vstack([outline, forehead_points])
+        
+        # Create and fill the mask
+        hull = cv2.convexHull(all_points)
+        cv2.fillConvexPoly(mask, hull, 255)
+    
+    return mask
+
+def blur_edges(mask: np.ndarray, blur_amount: int = 40) -> np.ndarray:
+    blur_amount = blur_amount if blur_amount % 2 == 1 else blur_amount + 1
+    return cv2.GaussianBlur(mask, (blur_amount, blur_amount), 0)
 
 def swap_face(source_face: Face, target_face: Face, temp_frame: Frame) -> Frame:
-    return get_face_swapper().get(temp_frame, target_face, source_face, paste_back=True)
+    face_swapper = get_face_swapper()
+    
+    # Apply the face swap
+    swapped_frame = face_swapper.get(temp_frame, target_face, source_face, paste_back=True)
+    
+    # Create a mask for the target face
+    target_mask = create_face_mask(target_face, temp_frame)
+    
+    # Blur the edges of the mask
+    blurred_mask = blur_edges(target_mask)
+    blurred_mask = blurred_mask / 255.0
+    
+    # Ensure the mask has 3 channels to match the frame
+    blurred_mask_3channel = np.repeat(blurred_mask[:, :, np.newaxis], 3, axis=2)
+    
+    # Blend the swapped face with the original frame using the blurred mask
+    blended_frame = (swapped_frame * blurred_mask_3channel + 
+                     temp_frame * (1 - blurred_mask_3channel))
+    
+    return blended_frame.astype(np.uint8)
 
 def create_mouth_mask(face: Face, frame: Frame) -> (np.ndarray, np.ndarray):
     mask = np.zeros(frame.shape[:2], dtype=np.uint8)
