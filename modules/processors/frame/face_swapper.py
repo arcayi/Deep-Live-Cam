@@ -61,7 +61,7 @@ def create_mouth_mask(face: Face, frame: Frame) -> (np.ndarray, np.ndarray):
         min_x, min_y = np.min(mouth_points, axis=0)
         max_x, max_y = np.max(mouth_points, axis=0)
         min_x = max(0, min_x - (15*6))
-        min_y = max(0, min_y - 10)
+        min_y = max(0, min_y - 22)
         max_x = min(frame.shape[1], max_x + (15*6))
         max_y = min(frame.shape[0], max_y + (90*6))
         
