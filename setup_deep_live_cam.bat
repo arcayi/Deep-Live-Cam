@@ -39,25 +39,25 @@ echo Installing Visual Studio 2022 Runtimes...
 winget install --id Microsoft.VC++2015-2022Redist-x64 -e --source winget
 
 :: 2. Clone Repository
-if exist Deep-Live-Cam (
-    echo Deep-Live-Cam directory already exists.
+if exist iRoopDeepFaceCam (
+    echo iRoopDeepFaceCam directory already exists.
     set /p overwrite="Do you want to overwrite? (Y/N): "
     if /i "%overwrite%"=="Y" (
-        rmdir /s /q Deep-Live-Cam
-        git clone https://github.com/hacksider/Deep-Live-Cam.git
+        rmdir /s /q iRoopDeepFaceCam
+        git clone https://github.com/iVideoGameBoss/iRoopDeepFaceCam.git
     ) else (
         echo Skipping clone, using existing directory.
     )
 ) else (
-    git clone https://github.com/hacksider/Deep-Live-Cam.git
+    git clone https://github.com/iVideoGameBoss/iRoopDeepFaceCam.git
 )
-cd Deep-Live-Cam
+cd iRoopDeepFaceCam
 
 :: 3. Download Models
 echo Downloading models...
 mkdir models
-curl -L -o models/GFPGANv1.4.pth https://path.to.model/GFPGANv1.4.pth
-curl -L -o models/inswapper_128_fp16.onnx https://path.to.model/inswapper_128_fp16.onnx
+curl -L -o models/GFPGANv1.4.pth https://huggingface.co/ivideogameboss/iroopdeepfacecam/blob/main/GFPGANv1.4.pth
+curl -L -o models/inswapper_128_fp16.onnx https://huggingface.co/ivideogameboss/iroopdeepfacecam/blob/main/inswapper_128_fp16.onnx
 
 :: 4. Install dependencies
 echo Creating a virtual environment...
