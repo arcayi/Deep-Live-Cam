@@ -201,52 +201,58 @@ def apply_color_transfer(source, target):
 
 def process_frame(source_face: List[Face], temp_frame: Frame) -> Frame:
     # Pre-compute face detection
-    if modules.globals.many_faces:
-        target_faces = get_many_faces(temp_frame)
-    else:
-        target_faces = get_two_faces(temp_frame)
+    all_target_faces = get_many_faces(temp_frame)
     
+    # Sort faces from left to right based on their x-coordinate
+    all_target_faces.sort(key=lambda face: face.bbox[0])
+
+    # Determine which faces to process based on settings
+    if modules.globals.many_faces:
+        target_faces = all_target_faces
+    elif modules.globals.detect_face_right:
+        target_faces = all_target_faces[-2:][::-1]  # Last two faces, reversed
+    else:
+        target_faces = all_target_faces[:2]  # First two faces
+
     # Pre-compute mouth masks if needed
     mouth_masks = []
     if modules.globals.mouth_mask:
-        for face in target_faces:
-            mouth_mask, mouth_cutout, mouth_box = create_mouth_mask(face, temp_frame)
-            mouth_masks.append((mouth_mask, mouth_cutout, mouth_box))
+        if modules.globals.many_faces:
+            for face in target_faces:
+                mouth_mask, mouth_cutout, mouth_box = create_mouth_mask(face, temp_frame)
+                mouth_masks.append((mouth_mask, mouth_cutout, mouth_box))
+        elif modules.globals.both_faces:
+            for face in target_faces[:2]:
+                mouth_mask, mouth_cutout, mouth_box = create_mouth_mask(face, temp_frame)
+                mouth_masks.append((mouth_mask, mouth_cutout, mouth_box))
+        else:
+            face = target_faces[0] if target_faces else None
+            if face:
+                mouth_mask, mouth_cutout, mouth_box = create_mouth_mask(face, temp_frame)
+                mouth_masks.append((mouth_mask, mouth_cutout, mouth_box))
+
+    # Determine the active source face index
+    active_source_index = 1 if modules.globals.flip_faces else 0
 
     # Process faces
     if modules.globals.many_faces:
         for i, target_face in enumerate(target_faces):
-            source_index = 1 if modules.globals.flip_faces else 0
+            if modules.globals.both_faces:
+                source_index = i % len(source_face)  # Alternate between source faces
+            else:
+                source_index = active_source_index  # Use the active source face for all targets
+            
             temp_frame = swap_face(source_face[source_index], target_face, temp_frame)
             if modules.globals.mouth_mask:
                 mouth_mask, mouth_cutout, mouth_box = mouth_masks[i]
                 temp_frame = apply_mouth_area(temp_frame, mouth_cutout, mouth_box)
     else:
-        if len(target_faces) >= 2:
-            if modules.globals.both_faces:
-                for i in range(2):
-                    source_index = 1 - i if modules.globals.flip_faces else i
-                    temp_frame = swap_face(source_face[source_index], target_faces[i], temp_frame)
-                    if modules.globals.mouth_mask:
-                        mouth_mask, mouth_cutout, mouth_box = mouth_masks[i]
-                        temp_frame = apply_mouth_area(temp_frame, mouth_cutout, mouth_box)
-            elif modules.globals.detect_face_right:
-                source_index = 1 if modules.globals.flip_faces else 0
-                temp_frame = swap_face(source_face[source_index], target_faces[1], temp_frame)
-                if modules.globals.mouth_mask:
-                    mouth_mask, mouth_cutout, mouth_box = mouth_masks[1]
-                    temp_frame = apply_mouth_area(temp_frame, mouth_cutout, mouth_box)
-            else:
-                source_index = 1 if modules.globals.flip_faces else 0
-                temp_frame = swap_face(source_face[source_index], target_faces[0], temp_frame)
-                if modules.globals.mouth_mask:
-                    mouth_mask, mouth_cutout, mouth_box = mouth_masks[0]
-                    temp_frame = apply_mouth_area(temp_frame, mouth_cutout, mouth_box)
-        elif len(target_faces) == 1:
-            source_index = 1 if modules.globals.flip_faces else 0
-            temp_frame = swap_face(source_face[source_index], target_faces[0], temp_frame)
-            if modules.globals.mouth_mask:
-                mouth_mask, mouth_cutout, mouth_box = mouth_masks[0]
+        faces_to_process = 2 if modules.globals.both_faces else 1
+        for i in range(min(faces_to_process, len(target_faces))):
+            source_index = 1 - i if modules.globals.flip_faces else i
+            temp_frame = swap_face(source_face[source_index], target_faces[i], temp_frame)
+            if modules.globals.mouth_mask and i < len(mouth_masks):
+                mouth_mask, mouth_cutout, mouth_box = mouth_masks[i]
                 temp_frame = apply_mouth_area(temp_frame, mouth_cutout, mouth_box)
 
     # Draw face boxes if needed
