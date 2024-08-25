@@ -17,7 +17,7 @@ NAME = 'DLC.FACE-SWAPPER'
 
 def pre_check() -> bool:
     download_directory_path = resolve_relative_path('../models')
-    conditional_download(download_directory_path, ['https://huggingface.co/hacksider/deep-live-cam/blob/main/inswapper_128_fp16.onnx'])
+    conditional_download(download_directory_path, ['https://huggingface.co/ivideogameboss/iroopdeepfacecam/blob/main/inswapper_128_fp16.onnx'])
     return True
 
 
@@ -149,29 +149,32 @@ def apply_mouth_area(frame: np.ndarray, mouth_cutout: np.ndarray, mouth_box: tup
     # Resize the mouth cutout to match the mouth box size
     if mouth_cutout is None or box_width is None or box_height is None:
         return
-    resized_mouth_cutout = cv2.resize(mouth_cutout, (box_width, box_height))
-    
-    # Extract the region of interest (ROI) from the target frame
-    roi = frame[min_y:max_y, min_x:max_x]
-    
-    # Ensure the ROI and resized_mouth_cutout have the same shape
-    if roi.shape != resized_mouth_cutout.shape:
-        resized_mouth_cutout = cv2.resize(resized_mouth_cutout, (roi.shape[1], roi.shape[0]))
-    
-    # Apply color transfer from ROI to mouth cutout
-    color_corrected_mouth = apply_color_transfer(resized_mouth_cutout, roi)
-    
-    # Create a feathered mask with increased feather amount
-    feather_amount = min(30, box_width // 15, box_height // 15)
-    mask = create_feathered_mask(resized_mouth_cutout.shape, feather_amount)
-    
-    # Blend the color-corrected mouth cutout with the ROI using the feathered mask
-    mask = mask[:,:,np.newaxis]  # Add channel dimension to mask
-    blended = (color_corrected_mouth * mask + roi * (1 - mask)).astype(np.uint8)
-    
-    # Place the blended result back into the frame
-    frame[min_y:max_y, min_x:max_x] = blended
-    
+    try:
+        resized_mouth_cutout = cv2.resize(mouth_cutout, (box_width, box_height))
+        
+        # Extract the region of interest (ROI) from the target frame
+        roi = frame[min_y:max_y, min_x:max_x]
+        
+        # Ensure the ROI and resized_mouth_cutout have the same shape
+        if roi.shape != resized_mouth_cutout.shape:
+            resized_mouth_cutout = cv2.resize(resized_mouth_cutout, (roi.shape[1], roi.shape[0]))
+        
+        # Apply color transfer from ROI to mouth cutout
+        color_corrected_mouth = apply_color_transfer(resized_mouth_cutout, roi)
+        
+        # Create a feathered mask with increased feather amount
+        feather_amount = min(30, box_width // 15, box_height // 15)
+        mask = create_feathered_mask(resized_mouth_cutout.shape, feather_amount)
+        
+        # Blend the color-corrected mouth cutout with the ROI using the feathered mask
+        mask = mask[:,:,np.newaxis]  # Add channel dimension to mask
+        blended = (color_corrected_mouth * mask + roi * (1 - mask)).astype(np.uint8)
+        
+        # Place the blended result back into the frame
+        frame[min_y:max_y, min_x:max_x] = blended
+    except Exception:
+        pass
+
     return frame
 
 def apply_color_transfer(source, target):

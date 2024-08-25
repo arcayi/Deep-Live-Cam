@@ -4,13 +4,16 @@ import customtkinter as ctk
 from typing import Callable, Tuple
 import cv2
 from PIL import Image, ImageOps
-
+import numpy as np
 import modules.globals
 import modules.metadata
 from modules.face_analyser import get_one_face, get_one_face_left, get_one_face_right
 from modules.capturer import get_video_frame, get_video_frame_total
 from modules.processors.frame.core import get_frame_processors_modules
 from modules.utilities import is_image, is_video, resolve_relative_path, has_image_extension
+
+global camera
+camera = None
 
 ROOT = None
 ROOT_HEIGHT = 700
@@ -19,8 +22,8 @@ ROOT_WIDTH = 600
 PREVIEW = None
 PREVIEW_MAX_HEIGHT = 700
 PREVIEW_MAX_WIDTH  = 1200
-PREVIEW_DEFAULT_WIDTH  = 960
-PREVIEW_DEFAULT_HEIGHT = 540
+PREVIEW_DEFAULT_WIDTH  = 640
+PREVIEW_DEFAULT_HEIGHT = 360
 BLUR_SIZE=1
 
 RECENT_DIRECTORY_SOURCE = None
@@ -136,8 +139,8 @@ def create_root(start: Callable[[], None], destroy: Callable[[], None]) -> ctk.C
     preview_button.place(relx=0.65, rely=0.80, relwidth=0.2, relheight=0.05)
 
     # Add preview size dropdown
-    preview_size_var = ctk.StringVar(value="960x540")
-    preview_size_dropdown = ctk.CTkOptionMenu(root, values=["854x480", "960x540", "1280x720", "1920x1080"],
+    preview_size_var = ctk.StringVar(value="640x360")
+    preview_size_dropdown = ctk.CTkOptionMenu(root, values=["640x360","854x480", "960x540", "1280x720", "1920x1080"],
                                               variable=preview_size_var,
                                               command=update_preview_size)
     preview_size_dropdown.place(relx=0.65, rely=0.86, relwidth=0.2, relheight=0.05)
@@ -340,75 +343,114 @@ def update_preview(frame_number: int = 0) -> None:
 
 def webcam_preview():
     if modules.globals.source_path is None:
-        # No image selected
         return
 
-    global preview_label, PREVIEW
+    global preview_label, PREVIEW, ROOT, camera
 
-    camera = cv2.VideoCapture(0)                                    # Use index for the webcam (adjust the index accordingly if necessary)    
-    camera.set(cv2.CAP_PROP_FRAME_WIDTH, PREVIEW_DEFAULT_WIDTH)     # Set the width of the resolution
-    camera.set(cv2.CAP_PROP_FRAME_HEIGHT, PREVIEW_DEFAULT_HEIGHT)   # Set the height of the resolution
-    camera.set(cv2.CAP_PROP_FPS, 60)                                # Set the frame rate of the webcam
+    # Set initial size of the preview window
+    PREVIEW_WIDTH = 640
+    PREVIEW_HEIGHT = 360
 
-    preview_label.configure(width=PREVIEW_DEFAULT_WIDTH, height=PREVIEW_DEFAULT_HEIGHT)  # Reset the preview image before startup
+    camera = cv2.VideoCapture(0)
+    update_camera_resolution()
 
-    PREVIEW.deiconify()  # Open preview window
+    # Configure the preview window
+    PREVIEW.deiconify()
+    PREVIEW.geometry(f"{PREVIEW_WIDTH}x{PREVIEW_HEIGHT}")
+    preview_label.configure(width=PREVIEW_WIDTH, height=PREVIEW_HEIGHT)
 
     frame_processors = get_frame_processors_modules(modules.globals.frame_processors)
 
-    source_image_left = None  # Left source face image
-    source_image_right = None  # Right source face image
-        
-    # Initialize variables for the selected face/s image. 
-    # Source image can have one face or two faces we simply detect face from left of frame
-    # then right of frame. This insures we always have a face to work with
-    if source_image_left is None and modules.globals.source_path:
+    source_image_left = None
+    source_image_right = None
+    
+    if modules.globals.source_path:
         source_image_left = get_one_face_left(cv2.imread(modules.globals.source_path))
-    if source_image_right is None and modules.globals.source_path:
         source_image_right = get_one_face_right(cv2.imread(modules.globals.source_path))
     
-    # no face found
     if source_image_left is None:
         print('No face found in source image')
         return
 
-    while camera:
+    while camera.isOpened():
         ret, frame = camera.read()
         if not ret:
             break
 
-        temp_frame = frame.copy()  #Create a copy of the frame
+        temp_frame = frame.copy()
 
         if modules.globals.live_mirror:
-            temp_frame = cv2.flip(temp_frame, 1) # horizontal flipping
-
-        if modules.globals.live_resizable:
-            temp_frame = fit_image_to_size(temp_frame, PREVIEW.winfo_width(), PREVIEW.winfo_height())
+            temp_frame = cv2.flip(temp_frame, 1)
 
         for frame_processor in frame_processors:
-            temp_frame = frame_processor.process_frame([source_image_left,source_image_right], temp_frame)
+            temp_frame = frame_processor.process_frame([source_image_left, source_image_right], temp_frame)
 
-        image = cv2.cvtColor(temp_frame, cv2.COLOR_BGR2RGB)  # Convert the image to RGB format to display it with Tkinter
+        # Get current preview window size
+        current_width = PREVIEW.winfo_width()
+        current_height = PREVIEW.winfo_height()
+
+        # Resize the processed frame to fit the current preview window size
+        temp_frame = fit_image_to_preview(temp_frame, current_width, current_height)
+
+        image = cv2.cvtColor(temp_frame, cv2.COLOR_BGR2RGB)
         image = Image.fromarray(image)
-        image = ImageOps.contain(image, (temp_frame.shape[1], temp_frame.shape[0]), Image.LANCZOS)
-        image = ctk.CTkImage(image, size=image.size)
-        preview_label.configure(image=image)
+        image = ctk.CTkImage(image, size=(current_width, current_height))
+        preview_label.configure(image=image, width=current_width, height=current_height)
         ROOT.update()
 
         if PREVIEW.state() == 'withdrawn':
             break
 
     camera.release()
-    PREVIEW.withdraw()  # Close preview window when loop is finished
+    PREVIEW.withdraw()
+
+
+def fit_image_to_preview(image, preview_width, preview_height):
+    h, w = image.shape[:2]
+    aspect_ratio = w / h
+
+    if preview_width / preview_height > aspect_ratio:
+        new_height = preview_height
+        new_width = int(new_height * aspect_ratio)
+    else:
+        new_width = preview_width
+        new_height = int(new_width / aspect_ratio)
+
+    resized_image = cv2.resize(image, (new_width, new_height), interpolation=cv2.INTER_LANCZOS4)
+
+    # Create a black canvas of the size of the preview window
+    canvas = np.zeros((preview_height, preview_width, 3), dtype=np.uint8)
+
+    # Calculate position to paste the resized image
+    y_offset = (preview_height - new_height) // 2
+    x_offset = (preview_width - new_width) // 2
+
+    # Paste the resized image onto the canvas
+    canvas[y_offset:y_offset+new_height, x_offset:x_offset+new_width] = resized_image
+
+    return canvas
+
+
 
 def update_preview_size(*args):
-    global PREVIEW_DEFAULT_WIDTH, PREVIEW_DEFAULT_HEIGHT
+    global PREVIEW_DEFAULT_WIDTH, PREVIEW_DEFAULT_HEIGHT, camera
     size = preview_size_var.get().split('x')
     PREVIEW_DEFAULT_WIDTH = int(size[0])
     PREVIEW_DEFAULT_HEIGHT = int(size[1])
+    
+    if camera is not None and camera.isOpened():
+        update_camera_resolution()
+    
     if PREVIEW.state() == 'normal':
         update_preview()
 
+def update_camera_resolution():
+    global camera, PREVIEW_DEFAULT_WIDTH, PREVIEW_DEFAULT_HEIGHT
+    if camera is not None and camera.isOpened():
+        camera.set(cv2.CAP_PROP_FRAME_WIDTH, PREVIEW_DEFAULT_WIDTH)
+        camera.set(cv2.CAP_PROP_FRAME_HEIGHT, PREVIEW_DEFAULT_HEIGHT)
+        camera.set(cv2.CAP_PROP_FPS, 60)  # You may want to make FPS configurable as well
+        
 def update_blur_size(*args):
     size = blur_size_var.get()
     modules.globals.blur_size = int(size)
