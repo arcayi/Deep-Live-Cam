@@ -16,7 +16,7 @@ global camera
 camera = None
 
 ROOT = None
-ROOT_HEIGHT = 700
+ROOT_HEIGHT = 750
 ROOT_WIDTH = 600
 
 PREVIEW = None
@@ -49,7 +49,7 @@ def init(start: Callable[[], None], destroy: Callable[[], None]) -> ctk.CTk:
 
 
 def create_root(start: Callable[[], None], destroy: Callable[[], None]) -> ctk.CTk:
-    global source_label, target_label, status_label,preview_size_var, mouth_mask_var
+    global source_label, target_label, status_label, preview_size_var, mouth_mask_var,mask_size_var
 
     ctk.deactivate_automatic_dpi_awareness()
     ctk.set_appearance_mode('system')
@@ -61,98 +61,105 @@ def create_root(start: Callable[[], None], destroy: Callable[[], None]) -> ctk.C
     root.configure()
     root.protocol('WM_DELETE_WINDOW', lambda: destroy())
 
+    # Image preview area
     source_label = ctk.CTkLabel(root, text=None)
-    source_label.place(relx=0.1, rely=0.08, relwidth=0.3, relheight=0.25)
+    source_label.place(relx=0.05, rely=0.05, relwidth=0.4, relheight=0.3)
 
     target_label = ctk.CTkLabel(root, text=None)
-    target_label.place(relx=0.6, rely=0.08, relwidth=0.3, relheight=0.25)
+    target_label.place(relx=0.55, rely=0.05, relwidth=0.4, relheight=0.3)
 
+    # Buttons for selecting source and target
     select_face_button = ctk.CTkButton(root, text='Select a face/s\n(left face)(right face)', cursor='hand2', command=lambda: select_source_path())
-    select_face_button.place(relx=0.1, rely=0.35, relwidth=0.3, relheight=0.1)
+    select_face_button.place(relx=0.05, rely=0.36, relwidth=0.4, relheight=0.08)
 
     select_target_button = ctk.CTkButton(root, text='Select a target', cursor='hand2', command=lambda: select_target_path())
-    select_target_button.place(relx=0.6, rely=0.35, relwidth=0.3, relheight=0.1)
+    select_target_button.place(relx=0.55, rely=0.36, relwidth=0.4, relheight=0.08)
 
-    both_faces_value = ctk.BooleanVar(value=modules.globals.both_faces)
-    both_faces_checkbox = ctk.CTkSwitch(root, text='Show both faces', variable=both_faces_value, cursor='hand2', command=lambda: setattr(modules.globals, 'both_faces', not modules.globals.both_faces))
-    both_faces_checkbox.place(relx=0.1, rely=0.50)
+    # Left column of switches
+    y_start = 0.46
+    y_increment = 0.06
 
-    flip_faces_value = ctk.BooleanVar(value=modules.globals.flip_faces)
-    flip_faces_checkbox = ctk.CTkSwitch(root, text='Flip left/right faces', variable=flip_faces_value, cursor='hand2', command=lambda: setattr(modules.globals, 'flip_faces', not modules.globals.flip_faces))
-    flip_faces_checkbox.place(relx=0.1, rely=0.55)
+    switches_left = [
+        ('Show both faces', 'both_faces'),
+        ('Flip left/right faces', 'flip_faces'),
+        ('Detect face from right', 'detect_face_right'),
+        ('Many faces', 'many_faces'),
+        ('Show target face box', 'show_target_face_box')
+    ]
 
+    for i, (text, attr) in enumerate(switches_left):
+        value = ctk.BooleanVar(value=getattr(modules.globals, attr, False))
+        switch = ctk.CTkSwitch(root, text=text, variable=value, cursor='hand2',
+                               command=lambda a=attr, v=value: setattr(modules.globals, a, v.get()))
+        switch.place(relx=0.05, rely=y_start + i*y_increment, relwidth=0.4)
 
+    # Face Enhancer switch (modified)
+    enhancer_value = ctk.BooleanVar(value=modules.globals.fp_ui.get('face_enhancer', False))
+    enhancer_switch = ctk.CTkSwitch(root, text='Face Enhancer', variable=enhancer_value, cursor='hand2',
+                                    command=lambda: update_tumbler('face_enhancer', enhancer_value.get()))
+    enhancer_switch.place(relx=0.05, rely=y_start + 5*y_increment, relwidth=0.4)
 
-    detect_face_right_value = ctk.BooleanVar(value=modules.globals.detect_face_right)
-    detect_face_right_checkbox = ctk.CTkSwitch(root, text='Detect face from right', variable=detect_face_right_value, cursor='hand2', command=lambda: setattr(modules.globals, 'detect_face_right', not modules.globals.detect_face_right))
-    detect_face_right_checkbox.place(relx=0.1, rely=0.60)
+    # Right column of switches
+    switches_right = [
+        ('Mirror webcam', 'live_mirror'),
+        ('Keep fps', 'keep_fps'),
+        ('Keep audio', 'keep_audio'),
+        ('Keep frames', 'keep_frames'),
+        ('NSFW filter', 'nsfw_filter')
+    ]
 
-    many_faces_value = ctk.BooleanVar(value=modules.globals.many_faces)
-    many_faces_switch = ctk.CTkSwitch(root, text='Many faces', variable=many_faces_value, cursor='hand2', command=lambda: setattr(modules.globals, 'many_faces', many_faces_value.get()))
-    many_faces_switch.place(relx=0.1, rely=0.65)
+    for i, (text, attr) in enumerate(switches_right):
+        value = ctk.BooleanVar(value=getattr(modules.globals, attr, False))
+        switch = ctk.CTkSwitch(root, text=text, variable=value, cursor='hand2',
+                               command=lambda a=attr, v=value: setattr(modules.globals, a, v.get()))
+        switch.place(relx=0.55, rely=y_start + i*y_increment, relwidth=0.4)
 
-    # for FRAME PROCESSOR ENHANCER tumbler:
-    enhancer_value = ctk.BooleanVar(value=modules.globals.fp_ui['face_enhancer'])
-    enhancer_switch = ctk.CTkSwitch(root, text='Face Enhancer', variable=enhancer_value, cursor='hand2', command=lambda: update_tumbler('face_enhancer',enhancer_value.get()))
-    enhancer_switch.place(relx=0.1, rely=0.70)
-
-    show_target_face_box_value = ctk.BooleanVar(value=modules.globals.show_target_face_box)
-    show_target_face_box_checkbox = ctk.CTkSwitch(root, text='Show target face box', variable=show_target_face_box_value, cursor='hand2', command=lambda: setattr(modules.globals, 'show_target_face_box', not modules.globals.show_target_face_box))
-    show_target_face_box_checkbox.place(relx=0.1, rely=0.75)
-
-    live_mirror_value = ctk.BooleanVar(value=modules.globals.live_mirror)
-    live_mirror_checkbox = ctk.CTkSwitch(root, text='Mirror webcam', variable=live_mirror_value, cursor='hand2', command=lambda: setattr(modules.globals, 'live_mirror', not modules.globals.live_mirror))
-    live_mirror_checkbox.place(relx=0.6, rely=0.50)
-
-    keep_fps_value = ctk.BooleanVar(value=modules.globals.keep_fps)
-    keep_fps_checkbox = ctk.CTkSwitch(root, text='Keep fps', variable=keep_fps_value, cursor='hand2', command=lambda: setattr(modules.globals, 'keep_fps', not modules.globals.keep_fps))
-    keep_fps_checkbox.place(relx=0.6, rely=0.55)
-
-    keep_audio_value = ctk.BooleanVar(value=modules.globals.keep_audio)
-    keep_audio_switch = ctk.CTkSwitch(root, text='Keep audio', variable=keep_audio_value, cursor='hand2', command=lambda: setattr(modules.globals, 'keep_audio', keep_audio_value.get()))
-    keep_audio_switch.place(relx=0.6, rely=0.60)
-
-    keep_frames_value = ctk.BooleanVar(value=modules.globals.keep_frames)
-    keep_frames_switch = ctk.CTkSwitch(root, text='Keep frames', variable=keep_frames_value, cursor='hand2', command=lambda: setattr(modules.globals, 'keep_frames', keep_frames_value.get()))
-    keep_frames_switch.place(relx=0.6, rely=0.65)
-
-    nsfw_value = ctk.BooleanVar(value=modules.globals.nsfw_filter)
-    nsfw_switch = ctk.CTkSwitch(root, text='NSFW filter', variable=nsfw_value, cursor='hand2', command=lambda: setattr(modules.globals, 'nsfw_filter', nsfw_value.get()))
-    nsfw_switch.place(relx=0.6, rely=0.70)
+    # Outline frame for mouth mask and dropdown
+    outline_frame = ctk.CTkFrame(root, fg_color="transparent", border_width=2, border_color="grey")
+    outline_frame.place(relx=0.55, rely=y_start + 5*y_increment, relwidth=0.44, relheight=0.08)
 
     mouth_mask_var = ctk.BooleanVar(value=modules.globals.mouth_mask)
-    mouth_mask_switch = ctk.CTkSwitch(root, text='Mouth mask', variable=mouth_mask_var, cursor='hand2', command=lambda: setattr(modules.globals, 'mouth_mask', mouth_mask_var.get()))
-    mouth_mask_switch.place(relx=0.6, rely=0.75)
+    mouth_mask_switch = ctk.CTkSwitch(outline_frame, text='Mouth mask', variable=mouth_mask_var, cursor='hand2',
+                                      command=lambda: setattr(modules.globals, 'mouth_mask', mouth_mask_var.get()))
+    mouth_mask_switch.place(relx=0.05, rely=0.1, relwidth=0.6, relheight=0.8)
+
+    mask_size_var = ctk.StringVar(value="6")
+    mask_size_dropdown = ctk.CTkOptionMenu(outline_frame, values=["1","2","3","4","5","6","7","8","9","10",],
+                                              variable=mask_size_var,
+                                              command=mask_size)
+    mask_size_dropdown.place(relx=0.7, rely=0.1, relwidth=0.28, relheight=0.8)
+
+    # Bottom buttons
+    button_width = 0.18  # Width of each button
+    button_height = 0.05  # Height of each button
+    button_y = 0.85  # Y position of the buttons
+    space_between = (1 - (button_width * 5)) / 6  # Space between buttons
 
     start_button = ctk.CTkButton(root, text='Start', cursor='hand2', command=lambda: select_output_path(start))
-    start_button.place(relx=0.15, rely=0.80, relwidth=0.2, relheight=0.05)
-
+    start_button.place(relx=space_between, rely=button_y, relwidth=button_width, relheight=button_height)
 
     stop_button = ctk.CTkButton(root, text='Destroy', cursor='hand2', command=lambda: destroy())
-    stop_button.place(relx=0.4, rely=0.80, relwidth=0.2, relheight=0.05)
+    stop_button.place(relx=space_between*2 + button_width, rely=button_y, relwidth=button_width, relheight=button_height)
 
     preview_button = ctk.CTkButton(root, text='Preview', cursor='hand2', command=lambda: toggle_preview())
-    preview_button.place(relx=0.65, rely=0.80, relwidth=0.2, relheight=0.05)
+    preview_button.place(relx=space_between*3 + button_width*2, rely=button_y, relwidth=button_width, relheight=button_height)
 
+    live_button = ctk.CTkButton(root, text='Live', cursor='hand2', command=lambda: webcam_preview(), fg_color="green", hover_color="dark green")
+    live_button.place(relx=space_between*4 + button_width*3, rely=button_y, relwidth=button_width, relheight=button_height)
 
-    preview_button = ctk.CTkButton(root, text='Preview', cursor='hand2', command=lambda: toggle_preview())
-    preview_button.place(relx=0.65, rely=0.80, relwidth=0.2, relheight=0.05)
-
-    # Add preview size dropdown
     preview_size_var = ctk.StringVar(value="640x360")
     preview_size_dropdown = ctk.CTkOptionMenu(root, values=["640x360","854x480", "960x540", "1280x720", "1920x1080"],
                                               variable=preview_size_var,
-                                              command=update_preview_size)
-    preview_size_dropdown.place(relx=0.65, rely=0.86, relwidth=0.2, relheight=0.05)
+                                              command=update_preview_size,
+                                              fg_color="green", button_color="dark green", button_hover_color="forest green")
+    preview_size_dropdown.place(relx=space_between*5 + button_width*4, rely=button_y, relwidth=button_width, relheight=button_height)
 
-    live_button = ctk.CTkButton(root, text='Live', cursor='hand2', command=lambda: webcam_preview())
-    live_button.place(relx=0.40, rely=0.86, relwidth=0.2, relheight=0.05)
-
+    # Status and donate labels
     status_label = ctk.CTkLabel(root, text=None, justify='center')
-    status_label.place(relx=0.1, rely=0.9, relwidth=0.8)
+    status_label.place(relx=0.05, rely=0.93, relwidth=0.9)
 
     donate_label = ctk.CTkLabel(root, text='iRoopDeepFaceCam', justify='center', cursor='hand2')
-    donate_label.place(relx=0.1, rely=0.95, relwidth=0.8)
+    donate_label.place(relx=0.05, rely=0.96, relwidth=0.9)
     donate_label.configure(text_color=ctk.ThemeManager.theme.get('URL').get('text_color'))
     donate_label.bind('<Button>', lambda event: webbrowser.open('https://buymeacoffee.com/ivideogameboss'))
 
@@ -451,11 +458,9 @@ def update_camera_resolution():
         camera.set(cv2.CAP_PROP_FRAME_HEIGHT, PREVIEW_DEFAULT_HEIGHT)
         camera.set(cv2.CAP_PROP_FPS, 60)  # You may want to make FPS configurable as well
         
-def update_blur_size(*args):
-    size = blur_size_var.get()
-    modules.globals.blur_size = int(size)
+def mask_size(*args):
+    size = mask_size_var.get()
+    modules.globals.mask_size = int(size)
 
-def update_blur_size_blend(*args):
-    size = blur_size_blend_var.get()
-    modules.globals.blur_size_blend = int(size)
+
     
