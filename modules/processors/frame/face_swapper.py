@@ -221,41 +221,45 @@ def create_feathered_mask(shape, feather_amount=30):
     mask = cv2.GaussianBlur(mask, (feather_amount*2+1, feather_amount*2+1), 0)
     return mask / np.max(mask)
 
-def apply_mouth_area(frame: np.ndarray, mouth_cutout: np.ndarray, mouth_box: tuple) -> np.ndarray:
+def apply_mouth_area(frame: np.ndarray, mouth_cutout: np.ndarray, mouth_box: tuple, face_mask: np.ndarray) -> np.ndarray:
     min_x, min_y, max_x, max_y = mouth_box
     box_width = max_x - min_x
     box_height = max_y - min_y
-    
-
+   
     # Resize the mouth cutout to match the mouth box size
     if mouth_cutout is None or box_width is None or box_height is None:
-        return
+        return frame
+    
     try:
         resized_mouth_cutout = cv2.resize(mouth_cutout, (box_width, box_height))
-        
+       
         # Extract the region of interest (ROI) from the target frame
         roi = frame[min_y:max_y, min_x:max_x]
-        
+       
         # Ensure the ROI and resized_mouth_cutout have the same shape
         if roi.shape != resized_mouth_cutout.shape:
             resized_mouth_cutout = cv2.resize(resized_mouth_cutout, (roi.shape[1], roi.shape[0]))
-        
+       
         # Apply color transfer from ROI to mouth cutout
         color_corrected_mouth = apply_color_transfer(resized_mouth_cutout, roi)
-        
+       
         # Create a feathered mask with increased feather amount
         feather_amount = min(30, box_width // 15, box_height // 15)
         mask = create_feathered_mask(resized_mouth_cutout.shape, feather_amount)
+       
+        # Limit the mask to the area within the face mask
+        face_mask_roi = face_mask[min_y:max_y, min_x:max_x]
+        mask = mask * (face_mask_roi / 255.0)
         
         # Blend the color-corrected mouth cutout with the ROI using the feathered mask
         mask = mask[:,:,np.newaxis]  # Add channel dimension to mask
         blended = (color_corrected_mouth * mask + roi * (1 - mask)).astype(np.uint8)
-        
+       
         # Place the blended result back into the frame
         frame[min_y:max_y, min_x:max_x] = blended
-    except Exception:
+    except Exception as e:
         pass
-
+    
     return frame
 
 def apply_color_transfer(source, target):
@@ -297,18 +301,25 @@ def process_frame(source_face: List[Face], temp_frame: Frame) -> Frame:
 
     # Pre-compute mouth masks if needed
     mouth_masks = []
+    face_masks = []
     if modules.globals.mouth_mask:
         if modules.globals.many_faces:
             for face in target_faces:
+                face_mask = create_face_mask(face, temp_frame)
+                face_masks.append(face_mask)
                 mouth_mask, mouth_cutout, mouth_box = create_mouth_mask(face, temp_frame)
                 mouth_masks.append((mouth_mask, mouth_cutout, mouth_box))
         elif modules.globals.both_faces:
             for face in target_faces[:2]:
+                face_mask = create_face_mask(face, temp_frame)
+                face_masks.append(face_mask)
                 mouth_mask, mouth_cutout, mouth_box = create_mouth_mask(face, temp_frame)
                 mouth_masks.append((mouth_mask, mouth_cutout, mouth_box))
         else:
             face = target_faces[0] if target_faces else None
             if face:
+                face_mask = create_face_mask(face, temp_frame)
+                face_masks.append(face_mask)
                 mouth_mask, mouth_cutout, mouth_box = create_mouth_mask(face, temp_frame)
                 mouth_masks.append((mouth_mask, mouth_cutout, mouth_box))
 
@@ -325,8 +336,9 @@ def process_frame(source_face: List[Face], temp_frame: Frame) -> Frame:
             
             temp_frame = swap_face(source_face[source_index], target_face, temp_frame)
             if modules.globals.mouth_mask:
-                mouth_mask, mouth_cutout, mouth_box = mouth_masks[len(target_faces) - 1 - i]
-                temp_frame = apply_mouth_area(temp_frame, mouth_cutout, mouth_box)
+                mouth_mask, mouth_cutout, mouth_box = mouth_masks[i]
+                face_mask = face_masks[i]
+                temp_frame = apply_mouth_area(temp_frame, mouth_cutout, mouth_box, face_mask)
     else:
         faces_to_process = 2 if modules.globals.both_faces else 1
         for i in range(min(faces_to_process, len(target_faces))):
@@ -335,7 +347,8 @@ def process_frame(source_face: List[Face], temp_frame: Frame) -> Frame:
             temp_frame = swap_face(source_face[source_index], target_faces[reverse_i], temp_frame)
             if modules.globals.mouth_mask and reverse_i < len(mouth_masks):
                 mouth_mask, mouth_cutout, mouth_box = mouth_masks[reverse_i]
-                temp_frame = apply_mouth_area(temp_frame, mouth_cutout, mouth_box)
+                face_mask = face_masks[reverse_i]
+                temp_frame = apply_mouth_area(temp_frame, mouth_cutout, mouth_box, face_mask)
 
     # Draw face boxes if needed
     if modules.globals.show_target_face_box:
