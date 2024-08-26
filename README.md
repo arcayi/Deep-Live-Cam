@@ -74,6 +74,11 @@ You can control how a face/s is replaced on target face\s
 
 3. Detect face from right - This feature is best used when you have one target face and "Show both faces" option is turned off. By default the target faces are detected from left of webcam, video or image. You might have a picture frame in background to the left of person and this can cause an issue. Turning on this option will replace target "Face 2" first then target "Face 1" second. This allows you to control which detected face gets replaced first. 
 
+## Live Webcam Buttons
+
+![livecam.jpg](livecam.jpg)
+
+To start the Live webcam you can click on the 'Live' button. It takes about 30 seconds for the preview window to show up. You can change the resolution to render the live deep fake. The higher you go the slower the face swap will be. You can resize the preview window indepenent of the webcam resolution. 
 
 ## How do I install it?
 ### I strongly recommend you check out [Deep-Live-Cam](https://github.com/hacksider/Deep-Live-Cam) as iRoopDeepFaceCam was based on thier original work. Checkout their [issues](https://github.com/hacksider/Deep-Live-Cam/issues) page as they will more then likely have the solution for you 
