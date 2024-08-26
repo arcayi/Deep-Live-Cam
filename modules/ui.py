@@ -123,8 +123,8 @@ def create_root(start: Callable[[], None], destroy: Callable[[], None]) -> ctk.C
                                       command=lambda: setattr(modules.globals, 'mouth_mask', mouth_mask_var.get()))
     mouth_mask_switch.place(relx=0.05, rely=0.1, relwidth=0.6, relheight=0.8)
 
-    mask_size_var = ctk.StringVar(value="6")
-    mask_size_dropdown = ctk.CTkOptionMenu(outline_frame, values=["1","2","3","4","5","6","7","8","9","10",],
+    mask_size_var = ctk.StringVar(value="7")
+    mask_size_dropdown = ctk.CTkOptionMenu(outline_frame, values=["5","6","7","8","9","10","11","12","13","14","15","16","17","18","19","20"],
                                               variable=mask_size_var,
                                               command=mask_size)
     mask_size_dropdown.place(relx=0.7, rely=0.1, relwidth=0.28, relheight=0.8)

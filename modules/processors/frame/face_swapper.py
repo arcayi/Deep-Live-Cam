@@ -103,33 +103,86 @@ def swap_face(source_face: Face, target_face: Face, temp_frame: Frame) -> Frame:
     
     return blended_frame.astype(np.uint8)
 
-def create_mouth_mask(face: Face, frame: Frame) -> (np.ndarray, np.ndarray):
+def create_mouth_mask(face: Face, frame: Frame) -> (np.ndarray, np.ndarray, tuple):
     mask = np.zeros(frame.shape[:2], dtype=np.uint8)
-      
     mouth_cutout = None
-    
     landmarks = face.landmark_2d_106
     if landmarks is not None:
-        # Get mouth landmarks (indices 52 to 71 typically represent the outer mouth)
-        mouth_points = landmarks[52:71].astype(np.int32)
+        # Get relevant landmarks
+        nose_tip = landmarks[80].astype(np.float32)
+        center_bottom = landmarks[73].astype(np.float32)
+        left_eye = landmarks[88].astype(np.float32)
+        right_eye = landmarks[38].astype(np.float32)
         
-        # Add padding to mouth area
-        min_x, min_y = np.min(mouth_points, axis=0)
-        max_x, max_y = np.max(mouth_points, axis=0)
-        min_x = max(0, min_x - (15*modules.globals.mask_size))
-        min_y = max(0, min_y - 2*modules.globals.mask_size)
-        max_x = min(frame.shape[1], max_x + (15*modules.globals.mask_size))
-        max_y = min(frame.shape[0], max_y + (90*modules.globals.mask_size))
+        # Calculate the vectors
+        center_to_nose = nose_tip - center_bottom
+        center_to_left_eye = nose_tip - left_eye
+        center_to_right_eye = nose_tip - right_eye
         
-        # Create a polygon mask for the mouth
-        mouth_polygon = np.array([(min_x, min_y), (max_x, min_y), (max_x, max_y), (min_x, max_y)])
-        cv2.fillPoly(mask, [mouth_polygon], 255)
+        # Calculate the lengths of the vectors
+        center_to_nose_length = np.linalg.norm(center_to_nose)
+        center_to_left_eye_length = np.linalg.norm(center_to_left_eye)
+        center_to_right_eye_length = np.linalg.norm(center_to_right_eye)
         
-        # Extract the mouth area from the frame using the calculated bounding box
+        # Find the largest length
+        largest_length = max(center_to_nose_length, center_to_left_eye_length, center_to_right_eye_length)
+        
+        # Determine which vector is the largest
+        if largest_length == center_to_nose_length:
+            largest_vector = center_to_nose
+        elif largest_length == center_to_left_eye_length:
+            largest_vector = center_to_left_eye
+        else:
+            largest_vector = center_to_right_eye
+        
+        # Set mask height using modules.globals.mask_size
+        base_height = largest_vector * 0.8
+        mask_height = np.linalg.norm(base_height) * modules.globals.mask_size 
+        
+        # Calculate mask top (pushed further down from nose tip) and bottom
+        mask_top = nose_tip + center_to_nose * 0.2  # Increased from 0.1 to 0.3
+        mask_bottom = mask_top + center_to_nose * (mask_height / np.linalg.norm(center_to_nose))
+        
+        # Calculate horizontal range
+        mouth_points = landmarks[52:71].astype(np.float32)
+        mouth_width = np.max(mouth_points[:, 0]) - np.min(mouth_points[:, 0])
+        
+        # Set mask width using modules.globals.mask_size
+        base_width = mouth_width * 0.4
+        mask_width = base_width * modules.globals.mask_size
+        
+        # Calculate mask center
+        mask_center = (mask_top + mask_bottom) / 2
+        
+        # Calculate mask left and right edges
+        mask_direction = np.array([-center_to_nose[1], center_to_nose[0]])  # Perpendicular to chin-to-nose
+        mask_direction /= np.linalg.norm(mask_direction)
+        
+        # Create mask polygon
+        mask_polygon = np.array([
+            mask_top + mask_direction * (mask_width / 2),
+            mask_top - mask_direction * (mask_width / 2),
+            mask_bottom - mask_direction * (mask_width / 2),
+            mask_bottom + mask_direction * (mask_width / 2)
+        ]).astype(np.int32)
+        
+        # Ensure the mask stays within the frame
+        mask_polygon[:, 0] = np.clip(mask_polygon[:, 0], 0, frame.shape[1] - 1)
+        mask_polygon[:, 1] = np.clip(mask_polygon[:, 1], 0, frame.shape[0] - 1)
+        
+        # Draw the mask
+        cv2.fillPoly(mask, [mask_polygon], 255)
+        
+        # Calculate bounding box for the mouth cutout
+        min_x, min_y = np.min(mask_polygon, axis=0)
+        max_x, max_y = np.max(mask_polygon, axis=0)
+        
+        # Extract the masked area from the frame
         mouth_cutout = frame[min_y:max_y, min_x:max_x].copy()
+    
+
 
     return mask, mouth_cutout, (min_x, min_y, max_x, max_y)
-
 
 
 def create_feathered_mask(shape, feather_amount=30):
