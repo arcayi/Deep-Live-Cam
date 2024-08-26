@@ -50,31 +50,59 @@ def create_face_mask(face: Face, frame: Frame) -> np.ndarray:
         # Convert landmarks to int32
         landmarks = landmarks.astype(np.int32)
         
-        # Get facial landmark points
-        outline = landmarks[:33]  # Face outline
-        left_eyebrow = landmarks[33:42]  # Left eyebrow
-        right_eyebrow = landmarks[42:51]  # Right eyebrow
+        # Extract facial features
+        right_side_face = landmarks[0:16]
+        left_side_face = landmarks[17:32]
+        right_eye = landmarks[33:42]
+        right_eye_brow = landmarks[43:51]
+        left_eye = landmarks[87:96]
+        left_eye_brow = landmarks[97:105]
+
+        # Calculate forehead extension
+        right_eyebrow_top = np.min(right_eye_brow[:, 1])
+        left_eyebrow_top = np.min(left_eye_brow[:, 1])
+        eyebrow_top = min(right_eyebrow_top, left_eyebrow_top)
         
-        # Calculate the highest point of eyebrows
-        highest_eyebrow_point = min(np.min(left_eyebrow[:, 1]), np.min(right_eyebrow[:, 1]))
-        
-        # Calculate how much to extend the forehead (e.g., 20% of face height)
-        face_height = np.max(outline[:, 1]) - highest_eyebrow_point
-        forehead_extension = int(face_height * 0.8)
-        
-        # Create points for extended forehead
-        forehead_points = np.array([
-            [landmarks[0, 0], highest_eyebrow_point - forehead_extension],  # Left forehead point
-            [landmarks[16, 0], highest_eyebrow_point - forehead_extension],  # Right forehead point
+        face_top = np.min([right_side_face[0, 1], left_side_face[-1, 1]])
+        forehead_height = face_top - eyebrow_top
+        extended_forehead_height = int(forehead_height * 5.0)  # Extend by 50%
+
+        # Create forehead points
+        forehead_left = right_side_face[0].copy()
+        forehead_right = left_side_face[-1].copy()
+        forehead_left[1] -= extended_forehead_height
+        forehead_right[1] -= extended_forehead_height
+
+        # Combine all points to create the face outline
+        face_outline = np.vstack([
+            [forehead_left],
+            right_side_face,
+            left_side_face[::-1],  # Reverse left side to create a continuous outline
+            [forehead_right]
         ])
-        
-        # Combine all points
-        all_points = np.vstack([outline, forehead_points])
-        
-        # Create and fill the mask
-        hull = cv2.convexHull(all_points)
-        cv2.fillConvexPoly(mask, hull, 255)
-    
+
+        # Calculate padding
+        padding = int(np.linalg.norm(right_side_face[0] - left_side_face[-1]) * 0.05)  # 5% of face width
+
+        # Create a slightly larger convex hull for padding
+        hull = cv2.convexHull(face_outline)
+        hull_padded = []
+        for point in hull:
+            x, y = point[0]
+            center = np.mean(face_outline, axis=0)
+            direction = np.array([x, y]) - center
+            direction = direction / np.linalg.norm(direction)
+            padded_point = np.array([x, y]) + direction * padding
+            hull_padded.append(padded_point)
+
+        hull_padded = np.array(hull_padded, dtype=np.int32)
+
+        # Fill the padded convex hull
+        cv2.fillConvexPoly(mask, hull_padded, 255)
+
+        # Smooth the mask edges
+        mask = cv2.GaussianBlur(mask, (5, 5), 3)
+
     return mask
 
 def blur_edges(mask: np.ndarray, blur_amount: int = 40) -> np.ndarray:
@@ -289,23 +317,24 @@ def process_frame(source_face: List[Face], temp_frame: Frame) -> Frame:
 
     # Process faces
     if modules.globals.many_faces:
-        for i, target_face in enumerate(target_faces):
+        for i, target_face in reversed(list(enumerate(target_faces))):
             if modules.globals.both_faces:
-                source_index = i % len(source_face)  # Alternate between source faces
+                source_index = (len(target_faces) - 1 - i) % len(source_face)  # Alternate between source faces in reverse
             else:
                 source_index = active_source_index  # Use the active source face for all targets
             
             temp_frame = swap_face(source_face[source_index], target_face, temp_frame)
             if modules.globals.mouth_mask:
-                mouth_mask, mouth_cutout, mouth_box = mouth_masks[i]
+                mouth_mask, mouth_cutout, mouth_box = mouth_masks[len(target_faces) - 1 - i]
                 temp_frame = apply_mouth_area(temp_frame, mouth_cutout, mouth_box)
     else:
         faces_to_process = 2 if modules.globals.both_faces else 1
         for i in range(min(faces_to_process, len(target_faces))):
-            source_index = 1 - i if modules.globals.flip_faces else i
-            temp_frame = swap_face(source_face[source_index], target_faces[i], temp_frame)
-            if modules.globals.mouth_mask and i < len(mouth_masks):
-                mouth_mask, mouth_cutout, mouth_box = mouth_masks[i]
+            reverse_i = len(target_faces) - 1 - i
+            source_index = reverse_i if modules.globals.flip_faces else (1 - reverse_i)
+            temp_frame = swap_face(source_face[source_index], target_faces[reverse_i], temp_frame)
+            if modules.globals.mouth_mask and reverse_i < len(mouth_masks):
+                mouth_mask, mouth_cutout, mouth_box = mouth_masks[reverse_i]
                 temp_frame = apply_mouth_area(temp_frame, mouth_cutout, mouth_box)
 
     # Draw face boxes if needed
