@@ -136,7 +136,7 @@ def create_root(start: Callable[[], None], destroy: Callable[[], None]) -> ctk.C
 
     # Down size dropdown
     mask_down_size_var = ctk.StringVar(value="5")
-    mask_down_size_dropdown = ctk.CTkOptionMenu(outline_frame, values=["-10","-9","-8","-7","-6","-5","-4","-3","-2","-1","1","2","3","4","5","6","7","8","9","10","11","12","13","14","15"],
+    mask_down_size_dropdown = ctk.CTkOptionMenu(outline_frame, values=["-15","-14","-13","-12","-11","-10","-9","-8","-7","-6","-5","-4","-3","-2","-1","1","2","3","4","5","6","7","8","9","10","11","12","13","14","15"],
                                             variable=mask_down_size_var,
                                             command=mask_down_size)
     mask_down_size_dropdown.place(relx=0.76, rely=0.1, relwidth=0.1, relheight=0.8)
