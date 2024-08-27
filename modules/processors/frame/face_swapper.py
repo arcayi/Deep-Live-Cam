@@ -268,7 +268,7 @@ def draw_mouth_mask_visualization(frame: Frame, face: Face) -> Frame:
             # Create an elliptical mask
             ellipse_mask = np.zeros((box_height, box_width), dtype=np.uint8)
             ellipse_center = (box_width // 2, box_height // 2)
-            ellipse_size = (int(box_width * 0.8) // 2, int(box_height * 0.7) // 2)
+            ellipse_size = (int(box_width * 0.9) // 2, int(box_height * 0.85) // 2)
             cv2.ellipse(ellipse_mask, ellipse_center, ellipse_size, 0, 0, 360, 255, -1)
 
             # Combine polygon and ellipse masks
@@ -325,7 +325,7 @@ def apply_mouth_area(frame: np.ndarray, mouth_cutout: np.ndarray, mouth_box: tup
         # Create an elliptical mask
         ellipse_mask = np.zeros(roi.shape[:2], dtype=np.uint8)
         ellipse_center = (box_width // 2, box_height // 2)
-        ellipse_size = (int(box_width * 0.8) // 2, int(box_height * 0.7) // 2)
+        ellipse_size = (int(box_width * 0.9) // 2, int(box_height * 0.85) // 2)
         cv2.ellipse(ellipse_mask, ellipse_center, ellipse_size, 0, 0, 360, 255, -1)
 
         # Combine polygon and ellipse masks
