@@ -49,7 +49,7 @@ def init(start: Callable[[], None], destroy: Callable[[], None]) -> ctk.CTk:
 
 
 def create_root(start: Callable[[], None], destroy: Callable[[], None]) -> ctk.CTk:
-    global source_label, target_label, status_label, preview_size_var, mouth_mask_var,mask_size_var
+    global source_label, target_label, status_label, preview_size_var, mouth_mask_var,mask_size_var,mask_down_size_var,mask_feather_ratio_var
 
     ctk.deactivate_automatic_dpi_awareness()
     ctk.set_appearance_mode('system')
@@ -94,11 +94,7 @@ def create_root(start: Callable[[], None], destroy: Callable[[], None]) -> ctk.C
                                command=lambda a=attr, v=value: setattr(modules.globals, a, v.get()))
         switch.place(relx=0.05, rely=y_start + i*y_increment, relwidth=0.4)
 
-    # Face Enhancer switch (modified)
-    enhancer_value = ctk.BooleanVar(value=modules.globals.fp_ui.get('face_enhancer', False))
-    enhancer_switch = ctk.CTkSwitch(root, text='Face Enhancer', variable=enhancer_value, cursor='hand2',
-                                    command=lambda: update_tumbler('face_enhancer', enhancer_value.get()))
-    enhancer_switch.place(relx=0.05, rely=y_start + 6*y_increment, relwidth=0.4)
+
 
     # Right column of switches
     switches_right = [
@@ -115,20 +111,44 @@ def create_root(start: Callable[[], None], destroy: Callable[[], None]) -> ctk.C
                                command=lambda a=attr, v=value: setattr(modules.globals, a, v.get()))
         switch.place(relx=0.55, rely=y_start + i*y_increment, relwidth=0.4)
 
+    # Face Enhancer switch (modified)
+    enhancer_value = ctk.BooleanVar(value=modules.globals.fp_ui.get('face_enhancer', False))
+    enhancer_switch = ctk.CTkSwitch(root, text='Face Enhancer', variable=enhancer_value, cursor='hand2',
+                                    command=lambda: update_tumbler('face_enhancer', enhancer_value.get()))
+    enhancer_switch.place(relx=0.55, rely=y_start + 5*y_increment, relwidth=0.4)
+
     # Outline frame for mouth mask and dropdown
     outline_frame = ctk.CTkFrame(root, fg_color="transparent", border_width=2, border_color="grey")
-    outline_frame.place(relx=0.55, rely=y_start + 5*y_increment, relwidth=0.44, relheight=0.08)
+    outline_frame.place(relx=0.02, rely=y_start + 5.8*y_increment, relwidth=0.96, relheight=0.06)
 
+    # Mouth mask switch
     mouth_mask_var = ctk.BooleanVar(value=modules.globals.mouth_mask)
-    mouth_mask_switch = ctk.CTkSwitch(outline_frame, text='Mouth mask', variable=mouth_mask_var, cursor='hand2',
-                                      command=lambda: setattr(modules.globals, 'mouth_mask', mouth_mask_var.get()))
-    mouth_mask_switch.place(relx=0.05, rely=0.1, relwidth=0.6, relheight=0.8)
+    mouth_mask_switch = ctk.CTkSwitch(outline_frame, text='Mouth mask | Feather, Height, Width ->', variable=mouth_mask_var, cursor='hand2',
+                                    command=lambda: setattr(modules.globals, 'mouth_mask', mouth_mask_var.get()))
+    mouth_mask_switch.place(relx=0.03, rely=0.1, relwidth=0.8, relheight=0.8)
 
-    mask_size_var = ctk.StringVar(value="7")
+    # Feather ratio dropdown
+    mask_feather_ratio_var = ctk.StringVar(value="8")
+    mask_feather_ratio_size_dropdown = ctk.CTkOptionMenu(outline_frame, values=["1","2","3","4","5","6","7","8","9","10"],
+                                            variable=mask_feather_ratio_var,
+                                            command=mask_feather_ratio_size)
+    mask_feather_ratio_size_dropdown.place(relx=0.65, rely=0.1, relwidth=0.1, relheight=0.8)
+
+    # Down size dropdown
+    mask_down_size_var = ctk.StringVar(value="5")
+    mask_down_size_dropdown = ctk.CTkOptionMenu(outline_frame, values=["-10","-9","-8","-7","-6","-5","-4","-3","-2","-1","1","2","3","4","5","6","7","8","9","10"],
+                                            variable=mask_down_size_var,
+                                            command=mask_down_size)
+    mask_down_size_dropdown.place(relx=0.76, rely=0.1, relwidth=0.1, relheight=0.8)
+
+    # Size dropdown
+    mask_size_var = ctk.StringVar(value="11")
     mask_size_dropdown = ctk.CTkOptionMenu(outline_frame, values=["5","6","7","8","9","10","11","12","13","14","15","16","17","18","19","20"],
-                                              variable=mask_size_var,
-                                              command=mask_size)
-    mask_size_dropdown.place(relx=0.7, rely=0.1, relwidth=0.28, relheight=0.8)
+                                            variable=mask_size_var,
+                                            command=mask_size)
+    mask_size_dropdown.place(relx=0.87, rely=0.1, relwidth=0.1, relheight=0.8)
+
+
 
     # Bottom buttons
     button_width = 0.18  # Width of each button
@@ -462,6 +482,14 @@ def update_camera_resolution():
 def mask_size(*args):
     size = mask_size_var.get()
     modules.globals.mask_size = int(size)
+
+def mask_down_size(*args):
+    size = mask_down_size_var.get()
+    modules.globals.mask_down_size = int(size)
+
+def mask_feather_ratio_size(*args):
+    size = mask_feather_ratio_var.get()
+    modules.globals.mask_feather_ratio = int(size)
 
 
     

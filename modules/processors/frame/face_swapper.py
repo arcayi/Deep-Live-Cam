@@ -109,6 +109,27 @@ def blur_edges(mask: np.ndarray, blur_amount: int = 40) -> np.ndarray:
     blur_amount = blur_amount if blur_amount % 2 == 1 else blur_amount + 1
     return cv2.GaussianBlur(mask, (blur_amount, blur_amount), 0)
 
+def apply_color_transfer(source, target):
+    """
+    Apply color transfer from target to source image
+    """
+    source = cv2.cvtColor(source, cv2.COLOR_BGR2LAB).astype("float32")
+    target = cv2.cvtColor(target, cv2.COLOR_BGR2LAB).astype("float32")
+
+    source_mean, source_std = cv2.meanStdDev(source)
+    target_mean, target_std = cv2.meanStdDev(target)
+
+    # Reshape mean and std to be broadcastable
+    source_mean = source_mean.reshape(1, 1, 3)
+    source_std = source_std.reshape(1, 1, 3)
+    target_mean = target_mean.reshape(1, 1, 3)
+    target_std = target_std.reshape(1, 1, 3)
+
+    # Perform the color transfer
+    source = (source - source_mean) * (target_std / source_std) + target_mean
+
+    return cv2.cvtColor(np.clip(source, 0, 255).astype("uint8"), cv2.COLOR_LAB2BGR)
+
 def swap_face(source_face: Face, target_face: Face, temp_frame: Frame) -> Frame:
     face_swapper = get_face_swapper()
     
@@ -131,6 +152,22 @@ def swap_face(source_face: Face, target_face: Face, temp_frame: Frame) -> Frame:
     
     return blended_frame.astype(np.uint8)
 
+def create_feathered_mask(shape, feather_amount):
+    mask = np.zeros(shape[:2], dtype=np.float32)
+    center = (shape[1] // 2, shape[0] // 2)
+    
+    # Ensure the feather amount doesn't exceed half the smaller dimension
+    max_feather = min(shape[0] // 2, shape[1] // 2) - 1
+    feather_amount = min(feather_amount, max_feather)
+    
+    # Ensure the axes are at least 1 pixel
+    axes = (max(1, shape[1] // 2 - feather_amount), 
+            max(1, shape[0] // 2 - feather_amount))
+    
+    cv2.ellipse(mask, center, axes, 0, 0, 360, 1, -1)
+    mask = cv2.GaussianBlur(mask, (feather_amount*2+1, feather_amount*2+1), 0)
+    return mask / np.max(mask)
+
 def create_mouth_mask(face: Face, frame: Frame) -> (np.ndarray, np.ndarray, tuple):
     mask = np.zeros(frame.shape[:2], dtype=np.uint8)
     mouth_cutout = None
@@ -145,7 +182,7 @@ def create_mouth_mask(face: Face, frame: Frame) -> (np.ndarray, np.ndarray, tupl
         base_height = largest_vector * 0.8
         mask_height = np.linalg.norm(base_height) * modules.globals.mask_size * 0.3
         
-        mask_top = nose_tip + center_to_nose * 0.2 + np.array([0, -modules.globals.mask_size * 0.1])
+        mask_top = nose_tip + center_to_nose * 0.2 + np.array([0, +modules.globals.mask_down_size ])
         mask_bottom = mask_top + center_to_nose * (mask_height / np.linalg.norm(center_to_nose))
         
         mouth_points = landmarks[52:71].astype(np.float32)
@@ -180,13 +217,88 @@ def create_mouth_mask(face: Face, frame: Frame) -> (np.ndarray, np.ndarray, tupl
     return mask, mouth_cutout, (min_x, min_y, max_x, max_y)
 
 
-def create_feathered_mask(shape, feather_amount=30):
-    mask = np.zeros(shape[:2], dtype=np.float32)
-    center = (shape[1] // 2, shape[0] // 2)
-    cv2.ellipse(mask, center, (shape[1] // 2 - feather_amount, shape[0] // 2 - feather_amount), 
-                0, 0, 360, 1, -1)
-    mask = cv2.GaussianBlur(mask, (feather_amount*2+1, feather_amount*2+1), 0)
-    return mask / np.max(mask)
+def draw_mouth_mask_visualization(frame: Frame, face: Face) -> Frame:
+    landmarks = face.landmark_2d_106
+    if landmarks is not None:
+        nose_tip = landmarks[80].astype(np.float32)
+        center_bottom = landmarks[73].astype(np.float32)
+
+        # Recreate mask polygon
+        center_to_nose = nose_tip - center_bottom
+        largest_vector = center_to_nose  # Simplified for this example
+        base_height = largest_vector * 0.8
+        mask_height = np.linalg.norm(base_height) * modules.globals.mask_size * 0.3
+
+        mask_top = nose_tip + center_to_nose * 0.2 + np.array([0, +modules.globals.mask_down_size])
+        mask_bottom = mask_top + center_to_nose * (mask_height / np.linalg.norm(center_to_nose))
+
+        mouth_points = landmarks[52:71].astype(np.float32)
+        mouth_width = np.max(mouth_points[:, 0]) - np.min(mouth_points[:, 0])
+        base_width = mouth_width * 0.4
+        mask_width = base_width * modules.globals.mask_size * 0.8
+
+        mask_direction = np.array([-center_to_nose[1], center_to_nose[0]], dtype=np.float32)
+        mask_direction /= np.linalg.norm(mask_direction)
+
+        mask_polygon = np.array([
+            mask_top + mask_direction * (mask_width / 2),
+            mask_top - mask_direction * (mask_width / 2),
+            mask_bottom - mask_direction * (mask_width / 2),
+            mask_bottom + mask_direction * (mask_width / 2)
+        ]).astype(np.int32)
+
+        # Calculate bounding box for the mouth area
+        min_x, min_y = np.min(mask_polygon, axis=0)
+        max_x, max_y = np.max(mask_polygon, axis=0)
+
+        # Ensure the box is within the frame boundaries
+        min_x = max(0, min_x)
+        min_y = max(0, min_y)
+        max_x = min(frame.shape[1], max_x)
+        max_y = min(frame.shape[0], max_y)
+        box_width = max_x - min_x
+        box_height = max_y - min_y
+
+        if box_width > 0 and box_height > 0:
+            # Create a binary mask from the polygon
+            polygon_mask = np.zeros((box_height, box_width), dtype=np.uint8)
+            adjusted_polygon = mask_polygon - [min_x, min_y]
+            cv2.fillPoly(polygon_mask, [adjusted_polygon], 255)
+
+            # Create an elliptical mask
+            ellipse_mask = np.zeros((box_height, box_width), dtype=np.uint8)
+            ellipse_center = (box_width // 2, box_height // 2)
+            ellipse_size = (int(box_width * 0.8) // 2, int(box_height * 0.7) // 2)
+            cv2.ellipse(ellipse_mask, ellipse_center, ellipse_size, 0, 0, 360, 255, -1)
+
+            # Combine polygon and ellipse masks
+            combined_shape_mask = cv2.bitwise_and(polygon_mask, ellipse_mask)
+
+            feather_amount = min(30, box_width // modules.globals.mask_feather_ratio, box_height // modules.globals.mask_feather_ratio)
+            feathered_mask = create_feathered_mask((box_height, box_width), feather_amount)
+
+            # Clip the feathered mask to the combined shape area
+            feathered_mask = feathered_mask * (combined_shape_mask / 255.0)
+
+            # Convert feathered mask to color image for visualization
+            feathered_mask_color = cv2.applyColorMap((feathered_mask * 255).astype(np.uint8), cv2.COLORMAP_JET)
+
+            # Overlay feathered mask on the frame
+            roi = frame[min_y:max_y, min_x:max_x]
+            blended = cv2.addWeighted(roi, 1, feathered_mask_color, 0.5, 0)
+            frame[min_y:max_y, min_x:max_x] = blended
+
+        # Draw line from center to tip
+        cv2.line(frame, tuple(center_bottom.astype(int)), tuple(nose_tip.astype(int)), (0, 0, 255), 2)
+
+        # Draw original mask polygon
+        cv2.polylines(frame, [mask_polygon], True, (0, 0, 255), 2)
+
+        # Draw ellipse outline
+        ellipse_center_global = (ellipse_center[0] + min_x, ellipse_center[1] + min_y)
+        cv2.ellipse(frame, ellipse_center_global, ellipse_size, 0, 0, 360, (255, 255, 0), 2)
+
+    return frame
 
 def apply_mouth_area(frame: np.ndarray, mouth_cutout: np.ndarray, mouth_box: tuple, face_mask: np.ndarray, mouth_polygon: np.ndarray) -> np.ndarray:
     min_x, min_y, max_x, max_y = mouth_box
@@ -210,20 +322,26 @@ def apply_mouth_area(frame: np.ndarray, mouth_cutout: np.ndarray, mouth_box: tup
         adjusted_polygon = mouth_polygon - [min_x, min_y] # Adjust polygon coordinates to ROI
         cv2.fillPoly(polygon_mask, [adjusted_polygon], 255)
 
-        feather_amount = min(30, box_width // 15, box_height // 15)
+        # Create an elliptical mask
+        ellipse_mask = np.zeros(roi.shape[:2], dtype=np.uint8)
+        ellipse_center = (box_width // 2, box_height // 2)
+        ellipse_size = (int(box_width * 0.8) // 2, int(box_height * 0.7) // 2)
+        cv2.ellipse(ellipse_mask, ellipse_center, ellipse_size, 0, 0, 360, 255, -1)
+
+        # Combine polygon and ellipse masks
+        combined_shape_mask = cv2.bitwise_and(polygon_mask, ellipse_mask)
+        
+        feather_amount = min(30, box_width // modules.globals.mask_feather_ratio, box_height // modules.globals.mask_feather_ratio)
         feathered_mask = create_feathered_mask(resized_mouth_cutout.shape[:2], feather_amount)
        
-        # Clip the feathered mask to the polygon area
-        feathered_mask = feathered_mask * (polygon_mask / 255.0)
-
+        # Clip the feathered mask to the combined shape area
+        feathered_mask = feathered_mask * (combined_shape_mask / 255.0)
+        
         # Blur the edges of the clipped mask
-        # Dilate the mask slightly to cover all edges
         dilated_mask = cv2.dilate(feathered_mask, np.ones((3, 3), np.uint8), iterations=1)
-        # Apply Gaussian blur to the mask to smooth the edges
         blurred_mask = cv2.GaussianBlur(dilated_mask, (0, 0), sigmaX=5, sigmaY=5)
-        # Normalize the blurred mask back to 0-1
         blurred_mask = cv2.normalize(blurred_mask, None, alpha=0, beta=1, norm_type=cv2.NORM_MINMAX)
-
+        
         face_mask_roi = face_mask[min_y:max_y, min_x:max_x]
         combined_mask = blurred_mask * (face_mask_roi / 255.0)
        
@@ -240,26 +358,7 @@ def apply_mouth_area(frame: np.ndarray, mouth_cutout: np.ndarray, mouth_box: tup
    
     return frame
 
-def apply_color_transfer(source, target):
-    """
-    Apply color transfer from target to source image
-    """
-    source = cv2.cvtColor(source, cv2.COLOR_BGR2LAB).astype("float32")
-    target = cv2.cvtColor(target, cv2.COLOR_BGR2LAB).astype("float32")
 
-    source_mean, source_std = cv2.meanStdDev(source)
-    target_mean, target_std = cv2.meanStdDev(target)
-
-    # Reshape mean and std to be broadcastable
-    source_mean = source_mean.reshape(1, 1, 3)
-    source_std = source_std.reshape(1, 1, 3)
-    target_mean = target_mean.reshape(1, 1, 3)
-    target_std = target_std.reshape(1, 1, 3)
-
-    # Perform the color transfer
-    source = (source - source_mean) * (target_std / source_std) + target_mean
-
-    return cv2.cvtColor(np.clip(source, 0, 255).astype("uint8"), cv2.COLOR_LAB2BGR)
 
 
 def process_frame(source_face: List[Face], temp_frame: Frame) -> Frame:
@@ -397,74 +496,7 @@ def process_frame(source_face: List[Face], temp_frame: Frame) -> Frame:
 
     return temp_frame
 
-def draw_mouth_mask_visualization(frame: Frame, face: Face) -> Frame:
-    landmarks = face.landmark_2d_106
-    if landmarks is not None:
-        nose_tip = landmarks[80].astype(np.float32)
-        center_bottom = landmarks[73].astype(np.float32)
-       
-        # Recreate mask polygon
-        center_to_nose = nose_tip - center_bottom
-        largest_vector = center_to_nose  # Simplified for this example
-        base_height = largest_vector * 0.8
-        mask_height = np.linalg.norm(base_height) * modules.globals.mask_size * 0.3
-       
-        mask_top = nose_tip + center_to_nose * 0.2 + np.array([0, -modules.globals.mask_size * 0.1])
-        mask_bottom = mask_top + center_to_nose * (mask_height / np.linalg.norm(center_to_nose))
-       
-        mouth_points = landmarks[52:71].astype(np.float32)
-        mouth_width = np.max(mouth_points[:, 0]) - np.min(mouth_points[:, 0])
-        base_width = mouth_width * 0.4
-        mask_width = base_width * modules.globals.mask_size * 0.8
-       
-        mask_direction = np.array([-center_to_nose[1], center_to_nose[0]], dtype=np.float32)
-        mask_direction /= np.linalg.norm(mask_direction)
-       
-        mask_polygon = np.array([
-            mask_top + mask_direction * (mask_width / 2),
-            mask_top - mask_direction * (mask_width / 2),
-            mask_bottom - mask_direction * (mask_width / 2),
-            mask_bottom + mask_direction * (mask_width / 2)
-        ]).astype(np.int32)
 
-        # Create a binary mask from the polygon
-        mask = np.zeros(frame.shape[:2], dtype=np.uint8)
-        cv2.fillPoly(mask, [mask_polygon], 255)
-
-        # Calculate bounding box for the mouth area
-        min_x, min_y = np.min(mask_polygon, axis=0)
-        max_x, max_y = np.max(mask_polygon, axis=0)
-
-        # Ensure the box is within the frame boundaries
-        min_x = max(0, min_x)
-        min_y = max(0, min_y)
-        max_x = min(frame.shape[1], max_x)
-        max_y = min(frame.shape[0], max_y)
-        box_width = max_x - min_x
-        box_height = max_y - min_y
-
-        if box_width > 0 and box_height > 0:
-            feather_amount = min(30, box_width // 15, box_height // 15)
-            feathered_mask = create_feathered_mask((box_height, box_width), feather_amount)
-            
-            # Clip the feathered mask to the polygon area
-            feathered_mask = feathered_mask * (mask[min_y:max_y, min_x:max_x] / 255.0)
-            
-            # Convert feathered mask to color image for visualization
-            feathered_mask_color = cv2.applyColorMap((feathered_mask * 255).astype(np.uint8), cv2.COLORMAP_JET)
-            
-            # Overlay feathered mask on the frame
-            roi = frame[min_y:max_y, min_x:max_x]
-            blended = cv2.addWeighted(roi, 1, feathered_mask_color, 0.5, 0)
-            frame[min_y:max_y, min_x:max_x] = blended
-
-        # Draw line from center to tip
-        cv2.line(frame, tuple(center_bottom.astype(int)), tuple(nose_tip.astype(int)), (0, 0, 255), 2)
-
-        # Draw mask polygon
-        cv2.polylines(frame, [mask_polygon], True, (0, 0, 255), 2)
-
-    return frame
 
 def process_frames(source_path: str, temp_frame_paths: List[str], progress: Any = None) -> None:
     
