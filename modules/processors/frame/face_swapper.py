@@ -136,57 +136,26 @@ def create_mouth_mask(face: Face, frame: Frame) -> (np.ndarray, np.ndarray, tupl
     mouth_cutout = None
     landmarks = face.landmark_2d_106
     if landmarks is not None:
-        # Get relevant landmarks
         nose_tip = landmarks[80].astype(np.float32)
         center_bottom = landmarks[73].astype(np.float32)
-        left_eye = landmarks[88].astype(np.float32)
-        right_eye = landmarks[38].astype(np.float32)
-        
-        # Calculate the vectors
+       
+        # Recreate mask polygon
         center_to_nose = nose_tip - center_bottom
-        center_to_left_eye = nose_tip - left_eye
-        center_to_right_eye = nose_tip - right_eye
-        
-        # Calculate the lengths of the vectors
-        center_to_nose_length = np.linalg.norm(center_to_nose)
-        center_to_left_eye_length = np.linalg.norm(center_to_left_eye)
-        center_to_right_eye_length = np.linalg.norm(center_to_right_eye)
-        
-        # Find the largest length
-        largest_length = max(center_to_nose_length, center_to_left_eye_length, center_to_right_eye_length)
-        
-        # Determine which vector is the largest
-        if largest_length == center_to_nose_length:
-            largest_vector = center_to_nose
-        elif largest_length == center_to_left_eye_length:
-            largest_vector = center_to_left_eye
-        else:
-            largest_vector = center_to_right_eye
-        
-        # Set mask height using modules.globals.mask_size
+        largest_vector = center_to_nose  # Simplified for this example
         base_height = largest_vector * 0.8
-        mask_height = np.linalg.norm(base_height) * modules.globals.mask_size 
+        mask_height = np.linalg.norm(base_height) * modules.globals.mask_size * 0.3
         
-        # Calculate mask top (pushed further down from nose tip) and bottom
-        mask_top = nose_tip + center_to_nose * 0.2  # Increased from 0.1 to 0.3
+        mask_top = nose_tip + center_to_nose * 0.2 + np.array([0, -modules.globals.mask_size * 0.1])
         mask_bottom = mask_top + center_to_nose * (mask_height / np.linalg.norm(center_to_nose))
         
-        # Calculate horizontal range
         mouth_points = landmarks[52:71].astype(np.float32)
         mouth_width = np.max(mouth_points[:, 0]) - np.min(mouth_points[:, 0])
-        
-        # Set mask width using modules.globals.mask_size
         base_width = mouth_width * 0.4
-        mask_width = base_width * modules.globals.mask_size
+        mask_width = base_width * modules.globals.mask_size * 0.8
         
-        # Calculate mask center
-        mask_center = (mask_top + mask_bottom) / 2
-        
-        # Calculate mask left and right edges
-        mask_direction = np.array([-center_to_nose[1], center_to_nose[0]])  # Perpendicular to chin-to-nose
+        mask_direction = np.array([-center_to_nose[1], center_to_nose[0]])
         mask_direction /= np.linalg.norm(mask_direction)
         
-        # Create mask polygon
         mask_polygon = np.array([
             mask_top + mask_direction * (mask_width / 2),
             mask_top - mask_direction * (mask_width / 2),
@@ -195,8 +164,8 @@ def create_mouth_mask(face: Face, frame: Frame) -> (np.ndarray, np.ndarray, tupl
         ]).astype(np.int32)
         
         # Ensure the mask stays within the frame
-        mask_polygon[:, 0] = np.clip(mask_polygon[:, 0], 0, frame.shape[1] - 1)
-        mask_polygon[:, 1] = np.clip(mask_polygon[:, 1], 0, frame.shape[0] - 1)
+       # mask_polygon[:, 0] = np.clip(mask_polygon[:, 0], 0, frame.shape[1] - 1)
+        #mask_polygon[:, 1] = np.clip(mask_polygon[:, 1], 0, frame.shape[0] - 1)
         
         # Draw the mask
         cv2.fillPoly(mask, [mask_polygon], 255)
@@ -208,8 +177,6 @@ def create_mouth_mask(face: Face, frame: Frame) -> (np.ndarray, np.ndarray, tupl
         # Extract the masked area from the frame
         mouth_cutout = frame[min_y:max_y, min_x:max_x].copy()
     
-
-
     return mask, mouth_cutout, (min_x, min_y, max_x, max_y)
 
 
@@ -221,45 +188,56 @@ def create_feathered_mask(shape, feather_amount=30):
     mask = cv2.GaussianBlur(mask, (feather_amount*2+1, feather_amount*2+1), 0)
     return mask / np.max(mask)
 
-def apply_mouth_area(frame: np.ndarray, mouth_cutout: np.ndarray, mouth_box: tuple, face_mask: np.ndarray) -> np.ndarray:
+def apply_mouth_area(frame: np.ndarray, mouth_cutout: np.ndarray, mouth_box: tuple, face_mask: np.ndarray, mouth_polygon: np.ndarray) -> np.ndarray:
     min_x, min_y, max_x, max_y = mouth_box
     box_width = max_x - min_x
     box_height = max_y - min_y
    
-    # Resize the mouth cutout to match the mouth box size
-    if mouth_cutout is None or box_width is None or box_height is None:
+    if mouth_cutout is None or box_width is None or box_height is None or face_mask is None or mouth_polygon is None:
         return frame
-    
+   
     try:
         resized_mouth_cutout = cv2.resize(mouth_cutout, (box_width, box_height))
-       
-        # Extract the region of interest (ROI) from the target frame
         roi = frame[min_y:max_y, min_x:max_x]
        
-        # Ensure the ROI and resized_mouth_cutout have the same shape
         if roi.shape != resized_mouth_cutout.shape:
             resized_mouth_cutout = cv2.resize(resized_mouth_cutout, (roi.shape[1], roi.shape[0]))
        
-        # Apply color transfer from ROI to mouth cutout
         color_corrected_mouth = apply_color_transfer(resized_mouth_cutout, roi)
        
-        # Create a feathered mask with increased feather amount
+        # Create a binary mask from the mouth polygon
+        polygon_mask = np.zeros(roi.shape[:2], dtype=np.uint8)
+        adjusted_polygon = mouth_polygon - [min_x, min_y] # Adjust polygon coordinates to ROI
+        cv2.fillPoly(polygon_mask, [adjusted_polygon], 255)
+
         feather_amount = min(30, box_width // 15, box_height // 15)
-        mask = create_feathered_mask(resized_mouth_cutout.shape, feather_amount)
+        feathered_mask = create_feathered_mask(resized_mouth_cutout.shape[:2], feather_amount)
        
-        # Limit the mask to the area within the face mask
+        # Clip the feathered mask to the polygon area
+        feathered_mask = feathered_mask * (polygon_mask / 255.0)
+
+        # Blur the edges of the clipped mask
+        # Dilate the mask slightly to cover all edges
+        dilated_mask = cv2.dilate(feathered_mask, np.ones((3, 3), np.uint8), iterations=1)
+        # Apply Gaussian blur to the mask to smooth the edges
+        blurred_mask = cv2.GaussianBlur(dilated_mask, (0, 0), sigmaX=5, sigmaY=5)
+        # Normalize the blurred mask back to 0-1
+        blurred_mask = cv2.normalize(blurred_mask, None, alpha=0, beta=1, norm_type=cv2.NORM_MINMAX)
+
         face_mask_roi = face_mask[min_y:max_y, min_x:max_x]
-        mask = mask * (face_mask_roi / 255.0)
-        
-        # Blend the color-corrected mouth cutout with the ROI using the feathered mask
-        mask = mask[:,:,np.newaxis]  # Add channel dimension to mask
-        blended = (color_corrected_mouth * mask + roi * (1 - mask)).astype(np.uint8)
+        combined_mask = blurred_mask * (face_mask_roi / 255.0)
        
-        # Place the blended result back into the frame
-        frame[min_y:max_y, min_x:max_x] = blended
+        combined_mask = combined_mask[:, :, np.newaxis]
+        blended = (color_corrected_mouth * combined_mask + roi * (1 - combined_mask)).astype(np.uint8)
+       
+        # Apply face mask to blended result
+        face_mask_3channel = np.repeat(face_mask_roi[:, :, np.newaxis], 3, axis=2) / 255.0
+        final_blend = blended * face_mask_3channel + roi * (1 - face_mask_3channel)
+       
+        frame[min_y:max_y, min_x:max_x] = final_blend.astype(np.uint8)
     except Exception as e:
         pass
-    
+   
     return frame
 
 def apply_color_transfer(source, target):
@@ -323,32 +301,95 @@ def process_frame(source_face: List[Face], temp_frame: Frame) -> Frame:
                 mouth_mask, mouth_cutout, mouth_box = create_mouth_mask(face, temp_frame)
                 mouth_masks.append((mouth_mask, mouth_cutout, mouth_box))
 
-    # Determine the active source face index
+    # Determine the active source face index and order
     active_source_index = 1 if modules.globals.flip_faces else 0
+    source_face_order = [1, 0] if modules.globals.flip_faces else [0, 1]
 
     # Process faces
     if modules.globals.many_faces:
-        for i, target_face in reversed(list(enumerate(target_faces))):
-            if modules.globals.both_faces:
-                source_index = (len(target_faces) - 1 - i) % len(source_face)  # Alternate between source faces in reverse
+        for i, target_face in enumerate(target_faces):
+            if modules.globals.both_faces and len(source_face) > 1:
+                source_index = source_face_order[i % 2]
             else:
                 source_index = active_source_index  # Use the active source face for all targets
-            
+       
             temp_frame = swap_face(source_face[source_index], target_face, temp_frame)
-            if modules.globals.mouth_mask:
+            if modules.globals.mouth_mask and i < len(mouth_masks):
                 mouth_mask, mouth_cutout, mouth_box = mouth_masks[i]
                 face_mask = face_masks[i]
-                temp_frame = apply_mouth_area(temp_frame, mouth_cutout, mouth_box, face_mask)
+                # Calculate mouth polygon here
+                landmarks = target_face.landmark_2d_106
+                if landmarks is not None:
+                    nose_tip = landmarks[80].astype(np.float32)
+                    center_bottom = landmarks[73].astype(np.float32)
+                    center_to_nose = nose_tip - center_bottom
+                    mask_height = np.linalg.norm(center_to_nose) * modules.globals.mask_size * 0.3
+                    mask_top = nose_tip + center_to_nose * 0.2 + np.array([0, -modules.globals.mask_size * 0.1])
+                    mask_bottom = mask_top + center_to_nose * (mask_height / np.linalg.norm(center_to_nose))
+                    mouth_points = landmarks[52:71].astype(np.float32)
+                    mouth_width = np.max(mouth_points[:, 0]) - np.min(mouth_points[:, 0])
+                    base_width = mouth_width * 0.4
+                    mask_width = base_width * modules.globals.mask_size * 0.8
+                    mask_direction = np.array([-center_to_nose[1], center_to_nose[0]], dtype=np.float32)
+                    mask_direction /= np.linalg.norm(mask_direction)
+                    mouth_polygon = np.array([
+                        mask_top + mask_direction * (mask_width / 2),
+                        mask_top - mask_direction * (mask_width / 2),
+                        mask_bottom - mask_direction * (mask_width / 2),
+                        mask_bottom + mask_direction * (mask_width / 2)
+                    ]).astype(np.int32)
+                    
+                    temp_frame = apply_mouth_area(temp_frame, mouth_cutout, mouth_box, face_mask, mouth_polygon)
+                else:
+                    # If landmarks are not available, fall back to the original method without mouth_polygon
+                    temp_frame = apply_mouth_area(temp_frame, mouth_cutout, mouth_box, face_mask, None)
+
+                if modules.globals.show_mouth_mask_box:            
+                    temp_frame = draw_mouth_mask_visualization(temp_frame, target_faces[i])
     else:
-        faces_to_process = 2 if modules.globals.both_faces else 1
+        # Process only the first face (or two faces if both_faces is True) when not in many_faces mode
+        faces_to_process = 2 if modules.globals.both_faces and len(source_face) > 1 else 1
         for i in range(min(faces_to_process, len(target_faces))):
-            reverse_i = len(target_faces) - 1 - i
-            source_index = reverse_i if modules.globals.flip_faces else (1 - reverse_i)
-            temp_frame = swap_face(source_face[source_index], target_faces[reverse_i], temp_frame)
-            if modules.globals.mouth_mask and reverse_i < len(mouth_masks):
-                mouth_mask, mouth_cutout, mouth_box = mouth_masks[reverse_i]
-                face_mask = face_masks[reverse_i]
-                temp_frame = apply_mouth_area(temp_frame, mouth_cutout, mouth_box, face_mask)
+            if modules.globals.both_faces and len(source_face) > 1:
+                source_index = source_face_order[i]
+            else:
+                source_index = active_source_index  # Always use the active source face
+       
+            temp_frame = swap_face(source_face[source_index], target_faces[i], temp_frame)
+            if modules.globals.mouth_mask and i < len(mouth_masks):
+                mouth_mask, mouth_cutout, mouth_box = mouth_masks[i]
+                face_mask = face_masks[i]
+                # Calculate mouth polygon here
+                landmarks = target_faces[i].landmark_2d_106
+                if landmarks is not None:
+                    nose_tip = landmarks[80].astype(np.float32)
+                    center_bottom = landmarks[73].astype(np.float32)
+                    center_to_nose = nose_tip - center_bottom
+                    mask_height = np.linalg.norm(center_to_nose) * modules.globals.mask_size * 0.3
+                    mask_top = nose_tip + center_to_nose * 0.2 + np.array([0, -modules.globals.mask_size * 0.1])
+                    mask_bottom = mask_top + center_to_nose * (mask_height / np.linalg.norm(center_to_nose))
+                    mouth_points = landmarks[52:71].astype(np.float32)
+                    mouth_width = np.max(mouth_points[:, 0]) - np.min(mouth_points[:, 0])
+                    base_width = mouth_width * 0.4
+                    mask_width = base_width * modules.globals.mask_size * 0.8
+                    mask_direction = np.array([-center_to_nose[1], center_to_nose[0]], dtype=np.float32)
+                    mask_direction /= np.linalg.norm(mask_direction)
+                    mouth_polygon = np.array([
+                        mask_top + mask_direction * (mask_width / 2),
+                        mask_top - mask_direction * (mask_width / 2),
+                        mask_bottom - mask_direction * (mask_width / 2),
+                        mask_bottom + mask_direction * (mask_width / 2)
+                    ]).astype(np.int32)
+                    
+                    temp_frame = apply_mouth_area(temp_frame, mouth_cutout, mouth_box, face_mask, mouth_polygon)
+                else:
+                    # If landmarks are not available, fall back to the original method without mouth_polygon
+                    temp_frame = apply_mouth_area(temp_frame, mouth_cutout, mouth_box, face_mask, None)
+
+
+                # Add visualization
+                if modules.globals.show_mouth_mask_box:
+                    temp_frame = draw_mouth_mask_visualization(temp_frame, target_faces[i])
 
     # Draw face boxes if needed
     if modules.globals.show_target_face_box:
@@ -356,6 +397,74 @@ def process_frame(source_face: List[Face], temp_frame: Frame) -> Frame:
 
     return temp_frame
 
+def draw_mouth_mask_visualization(frame: Frame, face: Face) -> Frame:
+    landmarks = face.landmark_2d_106
+    if landmarks is not None:
+        nose_tip = landmarks[80].astype(np.float32)
+        center_bottom = landmarks[73].astype(np.float32)
+       
+        # Recreate mask polygon
+        center_to_nose = nose_tip - center_bottom
+        largest_vector = center_to_nose  # Simplified for this example
+        base_height = largest_vector * 0.8
+        mask_height = np.linalg.norm(base_height) * modules.globals.mask_size * 0.3
+       
+        mask_top = nose_tip + center_to_nose * 0.2 + np.array([0, -modules.globals.mask_size * 0.1])
+        mask_bottom = mask_top + center_to_nose * (mask_height / np.linalg.norm(center_to_nose))
+       
+        mouth_points = landmarks[52:71].astype(np.float32)
+        mouth_width = np.max(mouth_points[:, 0]) - np.min(mouth_points[:, 0])
+        base_width = mouth_width * 0.4
+        mask_width = base_width * modules.globals.mask_size * 0.8
+       
+        mask_direction = np.array([-center_to_nose[1], center_to_nose[0]], dtype=np.float32)
+        mask_direction /= np.linalg.norm(mask_direction)
+       
+        mask_polygon = np.array([
+            mask_top + mask_direction * (mask_width / 2),
+            mask_top - mask_direction * (mask_width / 2),
+            mask_bottom - mask_direction * (mask_width / 2),
+            mask_bottom + mask_direction * (mask_width / 2)
+        ]).astype(np.int32)
+
+        # Create a binary mask from the polygon
+        mask = np.zeros(frame.shape[:2], dtype=np.uint8)
+        cv2.fillPoly(mask, [mask_polygon], 255)
+
+        # Calculate bounding box for the mouth area
+        min_x, min_y = np.min(mask_polygon, axis=0)
+        max_x, max_y = np.max(mask_polygon, axis=0)
+
+        # Ensure the box is within the frame boundaries
+        min_x = max(0, min_x)
+        min_y = max(0, min_y)
+        max_x = min(frame.shape[1], max_x)
+        max_y = min(frame.shape[0], max_y)
+        box_width = max_x - min_x
+        box_height = max_y - min_y
+
+        if box_width > 0 and box_height > 0:
+            feather_amount = min(30, box_width // 15, box_height // 15)
+            feathered_mask = create_feathered_mask((box_height, box_width), feather_amount)
+            
+            # Clip the feathered mask to the polygon area
+            feathered_mask = feathered_mask * (mask[min_y:max_y, min_x:max_x] / 255.0)
+            
+            # Convert feathered mask to color image for visualization
+            feathered_mask_color = cv2.applyColorMap((feathered_mask * 255).astype(np.uint8), cv2.COLORMAP_JET)
+            
+            # Overlay feathered mask on the frame
+            roi = frame[min_y:max_y, min_x:max_x]
+            blended = cv2.addWeighted(roi, 1, feathered_mask_color, 0.5, 0)
+            frame[min_y:max_y, min_x:max_x] = blended
+
+        # Draw line from center to tip
+        cv2.line(frame, tuple(center_bottom.astype(int)), tuple(nose_tip.astype(int)), (0, 0, 255), 2)
+
+        # Draw mask polygon
+        cv2.polylines(frame, [mask_polygon], True, (0, 0, 255), 2)
+
+    return frame
 
 def process_frames(source_path: str, temp_frame_paths: List[str], progress: Any = None) -> None:
     

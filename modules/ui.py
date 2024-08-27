@@ -70,13 +70,13 @@ def create_root(start: Callable[[], None], destroy: Callable[[], None]) -> ctk.C
 
     # Buttons for selecting source and target
     select_face_button = ctk.CTkButton(root, text='Select a face/s\n(left face)(right face)', cursor='hand2', command=lambda: select_source_path())
-    select_face_button.place(relx=0.05, rely=0.36, relwidth=0.4, relheight=0.08)
+    select_face_button.place(relx=0.05, rely=0.33, relwidth=0.4, relheight=0.08)
 
     select_target_button = ctk.CTkButton(root, text='Select a target', cursor='hand2', command=lambda: select_target_path())
-    select_target_button.place(relx=0.55, rely=0.36, relwidth=0.4, relheight=0.08)
+    select_target_button.place(relx=0.55, rely=0.33, relwidth=0.4, relheight=0.08)
 
     # Left column of switches
-    y_start = 0.46
+    y_start = 0.43
     y_increment = 0.06
 
     switches_left = [
@@ -84,7 +84,8 @@ def create_root(start: Callable[[], None], destroy: Callable[[], None]) -> ctk.C
         ('Flip left/right faces', 'flip_faces'),
         ('Detect face from right', 'detect_face_right'),
         ('Many faces', 'many_faces'),
-        ('Show target face box', 'show_target_face_box')
+        ('Show target face box','show_target_face_box'),
+        ('Show mouth mask box','show_mouth_mask_box')
     ]
 
     for i, (text, attr) in enumerate(switches_left):
@@ -97,7 +98,7 @@ def create_root(start: Callable[[], None], destroy: Callable[[], None]) -> ctk.C
     enhancer_value = ctk.BooleanVar(value=modules.globals.fp_ui.get('face_enhancer', False))
     enhancer_switch = ctk.CTkSwitch(root, text='Face Enhancer', variable=enhancer_value, cursor='hand2',
                                     command=lambda: update_tumbler('face_enhancer', enhancer_value.get()))
-    enhancer_switch.place(relx=0.05, rely=y_start + 5*y_increment, relwidth=0.4)
+    enhancer_switch.place(relx=0.05, rely=y_start + 6*y_increment, relwidth=0.4)
 
     # Right column of switches
     switches_right = [

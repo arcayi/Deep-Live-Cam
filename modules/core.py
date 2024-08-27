@@ -54,6 +54,7 @@ def parse_args() -> None:
     program.add_argument('--detect-face-right', help='detect target face from right of frame', dest='detect_face_right', action='store_true', default=False)
     program.add_argument('--show-target-face-box', help='show target face box', dest='show_target_face_box', action='store_true', default=False)
     program.add_argument('--mouth-mask', help='show target mouth using mask', dest='mouth_mask', action='store_true', default=False)
+    program.add_argument('--show-mouth-mask-box', help='show mouth mask box', dest='show_mouth_mask_box', action='store_true', default=False)
 
     # register deprecated args
     program.add_argument('-f', '--face', help=argparse.SUPPRESS, dest='source_path_deprecated')
@@ -86,6 +87,7 @@ def parse_args() -> None:
     modules.globals.detect_face_right = args.detect_face_right
     modules.globals.show_target_face_box = args.show_target_face_box
     modules.globals.mouth_mask = args.mouth_mask
+    modules.globals.show_mouth_mask_box = args.show_mouth_mask_box
 
 
     #for ENHANCER tumbler:
