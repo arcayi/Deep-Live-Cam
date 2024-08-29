@@ -1,5 +1,7 @@
 import os
 import sys
+
+from modules.face_analyser import initialize_face_analyser
 # single thread doubles cuda performance - needs to be set before torch import
 if any(arg.startswith('--execution-provider') for arg in sys.argv):
     os.environ['OMP_NUM_THREADS'] = '1'
@@ -258,6 +260,11 @@ def run() -> None:
         if not frame_processor.pre_check():
             return
     limit_resources()
+        # Add the initialization here
+    # Initialize face analyser
+    from modules.face_analyser import initialize_face_analyser
+    initialize_face_analyser()
+
     if modules.globals.headless:
         start()
     else:

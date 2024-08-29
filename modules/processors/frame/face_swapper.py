@@ -1,15 +1,32 @@
-from typing import Any, List
+from typing import Any, List, Dict, Optional, Tuple
+import time
 import cv2
 import insightface
 import threading
 import numpy as np
 import modules.globals
 import modules.processors.frame.core
-from modules.core import update_status
-from modules.face_analyser import get_one_face, get_many_faces, get_one_face_left, get_one_face_right,get_face_analyser
+from modules.face_analyser import get_one_face, get_many_faces, get_one_face_left, get_one_face_right, get_face_analyser
 from modules.typing import Face, Frame
 from modules.utilities import conditional_download, resolve_relative_path, is_image, is_video
 
+first_face_lost_count: int = 0
+second_face_lost_count: int = 0
+MAX_LOST_COUNT: int = 30  # Adjust this value based on your frame rate and desired persistence
+STICKINESS_FACTOR = 0.8  # Adjust this value to change how "sticky" the assignments are
+
+first_face_id: Optional[int] = None
+second_face_id: Optional[int] = None
+source_face_embeddings: List[np.ndarray] = []
+first_face_embedding: Optional[np.ndarray] = None
+second_face_embedding: Optional[np.ndarray] = None
+# Add these global variables at the top of your file
+first_face_position: Optional[Tuple[float, float]] = None
+second_face_position: Optional[Tuple[float, float]] = None
+position_threshold = 0.2  # Adjust this value to change sensitivity to position changes
+# Add these global variables at the top of your file
+last_assignment_time: float = 0
+assignment_cooldown: float = 1.0  # 1 second cooldown
 FACE_SWAPPER = None
 THREAD_LOCK = threading.Lock()
 NAME = 'DLC.FACE-SWAPPER'
@@ -20,8 +37,8 @@ def pre_check() -> bool:
     conditional_download(download_directory_path, ['https://huggingface.co/ivideogameboss/iroopdeepfacecam/blob/main/inswapper_128_fp16.onnx'])
     return True
 
-
 def pre_start() -> bool:
+    from modules.core import update_status
     if not is_image(modules.globals.source_path):
         update_status('Select an image for source path.', NAME)
         return False
@@ -32,7 +49,6 @@ def pre_start() -> bool:
         update_status('Select an image or video for target path.', NAME)
         return False
     return True
-
 
 def get_face_swapper() -> Any:
     global FACE_SWAPPER
@@ -216,7 +232,6 @@ def create_mouth_mask(face: Face, frame: Frame) -> (np.ndarray, np.ndarray, tupl
     
     return mask, mouth_cutout, (min_x, min_y, max_x, max_y)
 
-
 def draw_mouth_mask_visualization(frame: Frame, face: Face) -> Frame:
     landmarks = face.landmark_2d_106
     if landmarks is not None:
@@ -358,23 +373,134 @@ def apply_mouth_area(frame: np.ndarray, mouth_cutout: np.ndarray, mouth_box: tup
    
     return frame
 
+def reset_face_tracking():
+    global first_face_embedding, second_face_embedding
+    global first_face_position, second_face_position
+    global first_face_id, second_face_id
+    global first_face_lost_count, second_face_lost_count
 
+    first_face_embedding = None
+    second_face_embedding = None
+    first_face_position = None
+    second_face_position = None
+    first_face_id = None
+    second_face_id = None
+    first_face_lost_count = 0
+    second_face_lost_count = 0
 
+def get_face_center(face: Face) -> Tuple[float, float]:
+    bbox = face.bbox
+    return ((bbox[0] + bbox[2]) / 2, (bbox[1] + bbox[3]) / 2)
+
+def extract_face_embedding(face: Face) -> np.ndarray:
+    try:
+        if hasattr(face, 'embedding') and face.embedding is not None:
+            embedding = face.embedding
+        else:
+            # If the face doesn't have an embedding, we need to generate one
+            embedding = get_face_analyser.get(face)
+        
+        # Normalize the embedding
+        return embedding / np.linalg.norm(embedding)
+    except Exception as e:
+        print(f"Error extracting face embedding: {e}")
+        # Return a default embedding (all zeros) if extraction fails
+        return np.zeros(512, dtype=np.float32)
+
+def update_face_assignments(target_faces: List[Face]):
+    global first_face_embedding, second_face_embedding, first_face_position, second_face_position, last_assignment_time
+
+    if len(target_faces) == 0:
+        return
+
+    current_time = time.time()
+    if current_time - last_assignment_time < assignment_cooldown:
+        return  # Don't update assignments during cooldown period
+
+    try:
+        face_embeddings = [extract_face_embedding(face) for face in target_faces]
+        face_positions = [get_face_center(face) for face in target_faces]
+
+        if first_face_embedding is None and face_embeddings:
+            first_face_embedding = face_embeddings[0]
+            first_face_position = face_positions[0]
+            last_assignment_time = current_time
+        
+        if modules.globals.both_faces and second_face_embedding is None and len(face_embeddings) > 1:
+            second_face_embedding = face_embeddings[1]
+            second_face_position = face_positions[1]
+            last_assignment_time = current_time
+
+        if first_face_embedding is not None:
+            best_match_index = -1
+            best_match_score = -1
+            for i, (embedding, position) in enumerate(zip(face_embeddings, face_positions)):
+                embedding_similarity = cosine_similarity(first_face_embedding, embedding)
+                position_consistency = 1 / (1 + np.linalg.norm(np.array(position) - np.array(first_face_position))) if first_face_position else 0
+                combined_score = embedding_similarity * 0.7 + position_consistency * 0.3
+                
+                if combined_score > best_match_score and combined_score > 0.8:  # Increased threshold
+                    best_match_score = combined_score
+                    best_match_index = i
+
+            if best_match_index != -1:
+                first_face_embedding = face_embeddings[best_match_index]
+                first_face_position = face_positions[best_match_index]
+                last_assignment_time = current_time
+
+        if modules.globals.both_faces and second_face_embedding is not None:
+            remaining_embeddings = face_embeddings[:best_match_index] + face_embeddings[best_match_index+1:]
+            remaining_positions = face_positions[:best_match_index] + face_positions[best_match_index+1:]
+            
+            if remaining_embeddings:
+                best_match_index = -1
+                best_match_score = -1
+                for i, (embedding, position) in enumerate(zip(remaining_embeddings, remaining_positions)):
+                    embedding_similarity = cosine_similarity(second_face_embedding, embedding)
+                    position_consistency = 1 / (1 + np.linalg.norm(np.array(position) - np.array(second_face_position))) if second_face_position else 0
+                    combined_score = embedding_similarity * 0.7 + position_consistency * 0.3
+                    
+                    if combined_score > best_match_score and combined_score > 0.8:  # Increased threshold
+                        best_match_score = combined_score
+                        best_match_index = i
+
+                if best_match_index != -1:
+                    second_face_embedding = remaining_embeddings[best_match_index]
+                    second_face_position = remaining_positions[best_match_index]
+                    last_assignment_time = current_time
+
+    except Exception as e:
+        print(f"Error in update_face_assignments: {e}")
+
+def cosine_similarity(a: np.ndarray, b: np.ndarray) -> float:
+    return np.dot(a, b) / (np.linalg.norm(a) * np.linalg.norm(b))
+
+def get_best_match(embedding: np.ndarray, face_embeddings: List[np.ndarray]) -> int:
+    similarities = [cosine_similarity(embedding, face_embedding) for face_embedding in face_embeddings]
+    return np.argmax(similarities)
 
 def process_frame(source_face: List[Face], temp_frame: Frame) -> Frame:
-    # Pre-compute face detection
-    all_target_faces = get_many_faces(temp_frame)
-    
-    # Sort faces from left to right based on their x-coordinate
-    all_target_faces.sort(key=lambda face: face.bbox[0])
 
+    face_analyser  = get_face_analyser()
+       
+    try:
+        all_faces = face_analyser.get(temp_frame)
+    except Exception as e:
+        return temp_frame
+    
     # Determine which faces to process based on settings
     if modules.globals.many_faces:
-        target_faces = all_target_faces
-    elif modules.globals.detect_face_right:
-        target_faces = all_target_faces[-2:][::-1]  # Last two faces, reversed
+        target_faces = sorted(all_faces, key=lambda face: face.bbox[0])
+    elif modules.globals.both_faces:
+        if modules.globals.detect_face_right:
+            target_faces = sorted(all_faces, key=lambda face: -face.bbox[0])[:2]
+        else:
+            target_faces = sorted(all_faces, key=lambda face: face.bbox[0])[:2]
     else:
-        target_faces = all_target_faces[:2]  # First two faces
+        if modules.globals.detect_face_right:
+            target_faces = [max(all_faces, key=lambda face: face.bbox[0])] if all_faces else []
+        else:
+            target_faces = [min(all_faces, key=lambda face: face.bbox[0])] if all_faces else []
 
     # Pre-compute mouth masks if needed
     mouth_masks = []
@@ -492,11 +618,35 @@ def process_frame(source_face: List[Face], temp_frame: Frame) -> Frame:
 
     # Draw face boxes if needed
     if modules.globals.show_target_face_box:
-        temp_frame = get_face_analyser().draw_on(temp_frame, target_faces)
+        temp_frame = face_analyser.draw_on(temp_frame, target_faces)
 
     return temp_frame
 
+def apply_mouth_area_with_landmarks(temp_frame, mouth_cutout, mouth_box, face_mask, target_face):
+    landmarks = target_face.landmark_2d_106
+    if landmarks is not None:
+        nose_tip = landmarks[80].astype(np.float32)
+        center_bottom = landmarks[73].astype(np.float32)
+        center_to_nose = nose_tip - center_bottom
+        mask_height = np.linalg.norm(center_to_nose) * modules.globals.mask_size * 0.3
+        mask_top = nose_tip + center_to_nose * 0.2 + np.array([0, -modules.globals.mask_size * 0.1])
+        mask_bottom = mask_top + center_to_nose * (mask_height / np.linalg.norm(center_to_nose))
+        mouth_points = landmarks[52:71].astype(np.float32)
+        mouth_width = np.max(mouth_points[:, 0]) - np.min(mouth_points[:, 0])
+        base_width = mouth_width * 0.4
+        mask_width = base_width * modules.globals.mask_size * 0.8
+        mask_direction = np.array([-center_to_nose[1], center_to_nose[0]], dtype=np.float32)
+        mask_direction /= np.linalg.norm(mask_direction)
+        mouth_polygon = np.array([
+            mask_top + mask_direction * (mask_width / 2),
+            mask_top - mask_direction * (mask_width / 2),
+            mask_bottom - mask_direction * (mask_width / 2),
+            mask_bottom + mask_direction * (mask_width / 2)
+        ]).astype(np.int32)
 
+        return apply_mouth_area(temp_frame, mouth_cutout, mouth_box, face_mask, mouth_polygon)
+    else:
+        return apply_mouth_area(temp_frame, mouth_cutout, mouth_box, face_mask, None)
 
 def process_frames(source_path: str, temp_frame_paths: List[str], progress: Any = None) -> None:
     
@@ -520,7 +670,6 @@ def process_frames(source_path: str, temp_frame_paths: List[str], progress: Any 
         if progress:
             progress.update(1)
 
-
 def process_image(source_path: str, target_path: str, output_path: str) -> None:
     
     source_image_left = None  # Initialize variable for the selected face image
@@ -535,7 +684,6 @@ def process_image(source_path: str, target_path: str, output_path: str) -> None:
     target_frame = cv2.imread(target_path)
     result = process_frame([source_image_left,source_image_right], target_frame)
     cv2.imwrite(output_path, result)
-
 
 def process_video(source_path: str, temp_frame_paths: List[str]) -> None:
     modules.processors.frame.core.process_video(source_path, temp_frame_paths, process_frames)

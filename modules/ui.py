@@ -5,12 +5,15 @@ from typing import Callable, Tuple
 import cv2
 from PIL import Image, ImageOps
 import numpy as np
+import time
 import modules.globals
 import modules.metadata
-from modules.face_analyser import get_one_face, get_one_face_left, get_one_face_right
+from modules.face_analyser import get_one_face, get_one_face_left, get_one_face_right,get_many_faces
 from modules.capturer import get_video_frame, get_video_frame_total
 from modules.processors.frame.core import get_frame_processors_modules
+from modules.processors.frame.face_swapper import update_face_assignments
 from modules.utilities import is_image, is_video, resolve_relative_path, has_image_extension
+
 
 global camera
 camera = None
@@ -47,9 +50,8 @@ def init(start: Callable[[], None], destroy: Callable[[], None]) -> ctk.CTk:
 
     return ROOT
 
-
 def create_root(start: Callable[[], None], destroy: Callable[[], None]) -> ctk.CTk:
-    global source_label, target_label, status_label, preview_size_var, mouth_mask_var,mask_size_var,mask_down_size_var,mask_feather_ratio_var
+    global source_label, target_label, status_label, preview_size_var, mouth_mask_var,mask_size_var,mask_down_size_var,mask_feather_ratio_var,flip_faces_value,fps_label
 
     ctk.deactivate_automatic_dpi_awareness()
     ctk.set_appearance_mode('system')
@@ -61,6 +63,10 @@ def create_root(start: Callable[[], None], destroy: Callable[[], None]) -> ctk.C
     root.configure()
     root.protocol('WM_DELETE_WINDOW', lambda: destroy())
 
+    info_label = ctk.CTkLabel(root, text='Webcam takes 30 seconds to start on first face detection', justify='center')
+    info_label.place(relx=0, rely=0, relwidth=1)
+    fps_label = ctk.CTkLabel(root, text='FPS:  ', justify='center',font=("Arial", 12))
+    fps_label.place(relx=0, rely=0.04, relwidth=1)
     # Image preview area
     source_label = ctk.CTkLabel(root, text=None)
     source_label.place(relx=0.05, rely=0.05, relwidth=0.4, relheight=0.3)
@@ -81,7 +87,6 @@ def create_root(start: Callable[[], None], destroy: Callable[[], None]) -> ctk.C
 
     switches_left = [
         ('Show both faces', 'both_faces'),
-        ('Flip left/right faces', 'flip_faces'),
         ('Detect face from right', 'detect_face_right'),
         ('Many faces', 'many_faces'),
         ('Show target face box','show_target_face_box'),
@@ -94,7 +99,11 @@ def create_root(start: Callable[[], None], destroy: Callable[[], None]) -> ctk.C
                                command=lambda a=attr, v=value: setattr(modules.globals, a, v.get()))
         switch.place(relx=0.05, rely=y_start + i*y_increment, relwidth=0.4)
 
-
+    # Face Enhancer switch (modified)
+    flip_faces_value = ctk.BooleanVar(value=modules.globals.fp_ui.get('flip_faces', False))
+    flip_faces_switch = ctk.CTkSwitch(root, text='Flip left/right faces', variable=flip_faces_value, cursor='hand2',
+                                    command=lambda: flip_faces('flip_faces', flip_faces_value.get()))
+    flip_faces_switch.place(relx=0.05, rely=y_start + 5*y_increment, relwidth=0.4)
 
     # Right column of switches
     switches_right = [
@@ -110,6 +119,7 @@ def create_root(start: Callable[[], None], destroy: Callable[[], None]) -> ctk.C
         switch = ctk.CTkSwitch(root, text=text, variable=value, cursor='hand2',
                                command=lambda a=attr, v=value: setattr(modules.globals, a, v.get()))
         switch.place(relx=0.55, rely=y_start + i*y_increment, relwidth=0.4)
+
 
     # Face Enhancer switch (modified)
     enhancer_value = ctk.BooleanVar(value=modules.globals.fp_ui.get('face_enhancer', False))
@@ -169,7 +179,7 @@ def create_root(start: Callable[[], None], destroy: Callable[[], None]) -> ctk.C
     live_button.place(relx=space_between*4 + button_width*3, rely=button_y, relwidth=button_width, relheight=button_height)
 
     preview_size_var = ctk.StringVar(value="640x360")
-    preview_size_dropdown = ctk.CTkOptionMenu(root, values=["640x360","854x480", "960x540", "1280x720", "1920x1080"],
+    preview_size_dropdown = ctk.CTkOptionMenu(root, values=["426x240","480x270","512x288","640x360","854x480", "960x540", "1280x720", "1920x1080"],
                                               variable=preview_size_var,
                                               command=update_preview_size,
                                               fg_color="green", button_color="dark green", button_hover_color="forest green")
@@ -185,7 +195,6 @@ def create_root(start: Callable[[], None], destroy: Callable[[], None]) -> ctk.C
     donate_label.bind('<Button>', lambda event: webbrowser.open('https://buymeacoffee.com/ivideogameboss'))
 
     return root
-
 
 def create_preview(parent: ctk.CTkToplevel) -> ctk.CTkToplevel:
     global preview_label, preview_slider
@@ -204,15 +213,12 @@ def create_preview(parent: ctk.CTkToplevel) -> ctk.CTkToplevel:
 
     return preview
 
-
 def update_status(text: str) -> None:
     status_label.configure(text=text)
     ROOT.update()
 
-
 def update_tumbler(var: str, value: bool) -> None:
     modules.globals.fp_ui[var] = value
-
 
 def select_source_path() -> None:
     global RECENT_DIRECTORY_SOURCE, img_ft, vid_ft
@@ -227,7 +233,6 @@ def select_source_path() -> None:
     else:
         modules.globals.source_path = None
         source_label.configure(image=None)
-
 
 def select_target_path() -> None:
     global RECENT_DIRECTORY_TARGET, img_ft, vid_ft
@@ -248,7 +253,6 @@ def select_target_path() -> None:
         modules.globals.target_path = None
         target_label.configure(image=None)
 
-
 def select_output_path(start: Callable[[], None]) -> None:
     global RECENT_DIRECTORY_OUTPUT, img_ft, vid_ft
 
@@ -262,7 +266,6 @@ def select_output_path(start: Callable[[], None]) -> None:
         modules.globals.output_path = output_path
         RECENT_DIRECTORY_OUTPUT = os.path.dirname(modules.globals.output_path)
         start()
-
 
 def check_and_ignore_nsfw(target, destroy: Callable = None) -> bool:
     ''' Check if the target is NSFW.
@@ -280,7 +283,6 @@ def check_and_ignore_nsfw(target, destroy: Callable = None) -> bool:
         return True
     else: return False
 
-
 def fit_image_to_size(image, width: int, height: int):
     if width is None and height is None:
       return image
@@ -295,13 +297,11 @@ def fit_image_to_size(image, width: int, height: int):
     new_size = (int(ratio * w), int(ratio * h))
     return cv2.resize(image, dsize=new_size)
 
-
 def render_image_preview(image_path: str, size: Tuple[int, int]) -> ctk.CTkImage:
     image = Image.open(image_path)
     if size:
         image = ImageOps.fit(image, size, Image.LANCZOS)
     return ctk.CTkImage(image, size=image.size)
-
 
 def render_video_preview(video_path: str, size: Tuple[int, int], frame_number: int = 0) -> ctk.CTkImage:
     capture = cv2.VideoCapture(video_path)
@@ -316,14 +316,12 @@ def render_video_preview(video_path: str, size: Tuple[int, int], frame_number: i
     capture.release()
     cv2.destroyAllWindows()
 
-
 def toggle_preview() -> None:
     if PREVIEW.state() == 'normal':
         PREVIEW.withdraw()
     elif modules.globals.source_path and modules.globals.target_path:
         init_preview()
         update_preview()
-
 
 def init_preview() -> None:
     if is_image(modules.globals.target_path):
@@ -333,7 +331,6 @@ def init_preview() -> None:
         preview_slider.configure(to=video_frame_total)
         preview_slider.pack(fill='x')
         preview_slider.set(0)
-
 
 def update_preview(frame_number: int = 0) -> None:
     if modules.globals.source_path and modules.globals.target_path:
@@ -372,22 +369,37 @@ def update_preview(frame_number: int = 0) -> None:
 def webcam_preview():
     if modules.globals.source_path is None:
         return
-
     global preview_label, PREVIEW, ROOT, camera
+    global first_face_id, second_face_id  # Add these global variables
+    global first_face_embedding, second_face_embedding  # Add these global variables
+
+    # Reset face assignments
+    first_face_embedding = None
+    second_face_embedding = None
+    first_face_id = None
+    second_face_id = None
+
+    # Reset face assignments
+    first_face_embedding = None
+    second_face_embedding = None
+    # Reset face assignments
+    first_face_id = None
+    second_face_id = None
 
     # Set initial size of the preview window
     PREVIEW_WIDTH = 640
     PREVIEW_HEIGHT = 360
-
     camera = cv2.VideoCapture(0)
     update_camera_resolution()
-
     # Configure the preview window
     PREVIEW.deiconify()
     PREVIEW.geometry(f"{PREVIEW_WIDTH}x{PREVIEW_HEIGHT}")
     preview_label.configure(width=PREVIEW_WIDTH, height=PREVIEW_HEIGHT)
-
     frame_processors = get_frame_processors_modules(modules.globals.frame_processors)
+    
+    # for frame_processor in frame_processors:
+    #     if hasattr(frame_processor, 'reset_face_tracking'):
+    #             frame_processor.reset_face_tracking()
 
     source_image_left = None
     source_image_right = None
@@ -400,38 +412,54 @@ def webcam_preview():
         print('No face found in source image')
         return
 
+    # FPS calculation variables
+    frame_count = 0
+    start_time = time.time()
+    fps = 0
+
     while camera.isOpened():
         ret, frame = camera.read()
         if not ret:
             break
-
         temp_frame = frame.copy()
-
+        
         if modules.globals.live_mirror:
             temp_frame = cv2.flip(temp_frame, 1)
-
+        
+        # Get target faces
+        target_faces = get_many_faces(temp_frame)
+        
+        # Update face assignments
+        #update_face_assignments(target_faces)
+        
         for frame_processor in frame_processors:
             temp_frame = frame_processor.process_frame([source_image_left, source_image_right], temp_frame)
-
+        
+        # # Calculate and display FPS
+        frame_count += 1
+        current_time = time.time()
+        elapsed_time = current_time - start_time
+        if elapsed_time > 1:  # Update FPS every second
+            fps = frame_count / elapsed_time
+            frame_count = 0
+            start_time = current_time
+        
+        #cv2.putText(temp_frame, f"FPS: {fps:.2f}", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
+        fps_label.configure(text=f'FPS: {fps:.2f}')
         # Get current preview window size
         current_width = PREVIEW.winfo_width()
         current_height = PREVIEW.winfo_height()
-
         # Resize the processed frame to fit the current preview window size
         temp_frame = fit_image_to_preview(temp_frame, current_width, current_height)
-
         image = cv2.cvtColor(temp_frame, cv2.COLOR_BGR2RGB)
         image = Image.fromarray(image)
         image = ctk.CTkImage(image, size=(current_width, current_height))
         preview_label.configure(image=image, width=current_width, height=current_height)
         ROOT.update()
-
         if PREVIEW.state() == 'withdrawn':
             break
-
     camera.release()
     PREVIEW.withdraw()
-
 
 def fit_image_to_preview(image, preview_width, preview_height):
     h, w = image.shape[:2]
@@ -457,8 +485,6 @@ def fit_image_to_preview(image, preview_width, preview_height):
     canvas[y_offset:y_offset+new_height, x_offset:x_offset+new_width] = resized_image
 
     return canvas
-
-
 
 def update_preview_size(*args):
     global PREVIEW_DEFAULT_WIDTH, PREVIEW_DEFAULT_HEIGHT, camera
@@ -491,5 +517,8 @@ def mask_feather_ratio_size(*args):
     size = mask_feather_ratio_var.get()
     modules.globals.mask_feather_ratio = int(size)
 
-
+def flip_faces(*args):
+    size = flip_faces_value.get()
+    modules.globals.flip_faces = int(size)
+    modules.globals.flip_faces_value = True
     

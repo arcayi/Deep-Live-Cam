@@ -39,3 +39,4 @@ mask_feather_ratio=8
 mask_down_size=5
 mask_size=11
 show_mouth_mask_box=False
+flip_faces_value=False
