@@ -427,7 +427,7 @@ def webcam_preview():
             temp_frame = cv2.flip(temp_frame, 1)
         
         # Get target faces
-        target_faces = get_many_faces(temp_frame)
+        #target_faces = get_many_faces(temp_frame)
         
         # Update face assignments
         #update_face_assignments(target_faces)
