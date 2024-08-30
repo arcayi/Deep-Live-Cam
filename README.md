@@ -7,6 +7,8 @@ iRoopDeepFaceCam is based on the original [roop](https://github.com/s0md3v/roop)
 
 ![demo-gif](demo.gif)
 
+(Credit: [Deep-Live-Cam](https://github.com/hacksider/Deep-Live-Cam))
+
 ## Two faces replaced on webcam
 
 (watch this video to see how Two faces work)
@@ -28,6 +30,10 @@ Choose a face (image with desired face) and the target image/video (image/video 
 You can also enable Mouth Mask to process a video file or an image
 
 ![MouthMask.jpg](MouthMask.jpg)
+
+You can control the Mouth Mask exactly where you want to create a seamless blend with faceswap on webcam, video or image
+
+![MouthMaskDemo.jpg](MouthMaskDemo.jpg)
 
 ## Disclaimer
 This software is meant to be a productive contribution to the rapidly growing AI-generated media industry. It will help artists with tasks such as animating a custom character or using the character as a model for clothing etc.
