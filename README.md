@@ -9,7 +9,7 @@ But that's not all! iRoopDeepFaceCam also offers face tracking, perfect for keep
 
 (watch this video to see how live webcam deep fake works)
 
-![demo-gif](demo.gif)
+![demo-gif](images/demo.gif)
 
 Watch as a live webcam feed transforms into an incredible deep fake before your eyes! You’ll see the magic happen in real-time, with the deep fake capturing every detail — even light reflections on the face move naturally, making the transformation look unbelievably lifelike. It's not just a deep fake; it's like watching reality blend seamlessly with creativity!
 
@@ -19,7 +19,7 @@ Watch as a live webcam feed transforms into an incredible deep fake before your 
 
 (watch this video to see how Two faces deep fake work)
 
-![DemoTwoFace.gif](DemoTwoFace.gif)
+![DemoTwoFace.gif](images/DemoTwoFace.gif)
 
 Why settle for deep faking just one face when you can double the fun? With iRoopDeepFaceCam, you can use a source file with one or two faces to deep fake one or two people live on a webcam feed, video, or image. Imagine the endless possibilities for creating hilarious and entertaining YouTube videos—you and your partner can transform into anyone you want!
 
@@ -27,7 +27,7 @@ Take it up a notch by using OBS virtual webcam on livestreams, and watch as you 
 
 ## Supports processing of an image or video file with one or two faces plus mouth mask and face tracking on videos
 
-![DemoTwoFaceReplace.jpg](DemoTwoFaceReplace.jpg)
+![DemoTwoFaceReplace.jpg](images/DemoTwoFaceReplace.jpg)
 
 With iRoopDeepFaceCam, you can process an image or video file with one or two faces, using advanced features like face tracking and the mouth mask feature for an ultra-realistic effect. Here’s how easy it is to get started: simply choose a source image with the desired face, select a target image or video where you want to replace the face, and hit Start.
 
@@ -37,25 +37,25 @@ Then, just open your file explorer and navigate to the directory where you want 
 
 (watch this video to see how Mouth Mask works)
 
-![MouthMaskDemo.gif](MouthMaskDemo.gif)
+![MouthMaskDemo.gif](images/MouthMaskDemo.gif)
 
 You can also enable Mouth Mask to process a video file or an image
 
-![MouthMask.jpg](MouthMask.jpg)
+![MouthMask.jpg](images/MouthMask.jpg)
 
 With Mouth Mask mode in iRoopDeepFaceCam, you can interact with objects live via a webcam, video, or image, creating a seamless blend with the face swap. Imagine your face being deep-faked while eating, drinking, or talking—this groundbreaking technique lets you fully enjoy the magic of interactive deep fakes!
 
 What’s truly incredible about this feature is its ability to work in real-time with your webcam, giving you complete control over the Mouth Mask to place it exactly where you want it. Whether you're creating fun content or experimenting with new ideas, this real-time capability makes it super easy and entertaining to explore. Plus, when you pair it with OBS virtual camera, it takes the fun to a whole new level, allowing you to bring your deep fakes to life in live streams like never before. Dive in and experience the thrill!
 
-![MouthMaskDemo.jpg](MouthMaskDemo.jpg)
+![MouthMaskDemo.jpg](images/MouthMaskDemo.jpg)
 
 ## Auto One or Two Face Tracking (Max two people in frame)
 
-![FaceTracking.jpg](FaceTracking.jpg)
+![FaceTracking.jpg](images/FaceTracking.jpg)
 
 (watch this video to see how Two faces tracking works)
 
-![FaceTracking.gif](FaceTracking.gif)
+![FaceTracking.gif](images/FaceTracking.gif)
 
 Auto One or Two Face Tracking in iRoopDeepFaceCam takes your deep fake experience to the next level! With this feature, you can track up to two people in a frame on either a webcam or video file. The software automatically detects target faces from the left side of the frame and assigns up to two source faces to two target faces. This feature shines when two people are in the frame, allowing you to deep fake and track one or both faces with ease.
 
@@ -63,7 +63,7 @@ Need to switch things up? You can reset face tracking at any time to switch side
 
 ## Live Webcam Buttons
 
-![livecam.jpg](livecam.jpg)
+![livecam.jpg](images/livecam.jpg)
 
 To kick off the Live webcam feature in iRoopDeepFaceCam, just hit the 'Live' button. It takes about 30 seconds for the preview window to pop up. You can adjust the resolution of the live webcam to suit your needs, but keep in mind that higher resolutions may slow down the face swap process. Feel free to switch resolutions based on your computer's power and performance.
 
@@ -76,7 +76,7 @@ Executing `python run.py` command will launch this window:
 
 ## For the webcam mode
 
-![instruction.jpg](instruction.jpg)
+![instruction.jpg](images/instruction.jpg)
 
 Here's how to get started with iRoopDeepFaceCam:
 1. Select a Face: Choose an image with either one or two faces. The left face will be used as Face 1, and the right face will be used as Face 2.
@@ -85,7 +85,7 @@ Here's how to get started with iRoopDeepFaceCam:
 
 And that's it! You're all set to start your deep fake adventure. Enjoy the show!
 
-![demo-gif](demo.gif)
+![demo-gif](images/demo.gif)
 
 (Credit: [Deep-Live-Cam](https://github.com/hacksider/Deep-Live-Cam))
 
@@ -96,7 +96,7 @@ Just use your favorite screencapture to stream like OBS
 ## One/Two face controls for webcam mode, video or image
 You can control how a face/s is replaced on target face\s
 
-![FaceControls.jpg](FaceControls.jpg)
+![FaceControls.jpg](images/FaceControls.jpg)
 
 1. **Show Both Faces**: Enable this option if your source image has two faces and you want to replace both faces in your webcam feed, video, or image. By default, the left face in the source image is "Face 1" and the right face is "Face 2". If a face goes out of the frame in your video, "Face 1" will be used. To switch which face is used, see the "Flip left/right faces" option below.
 
