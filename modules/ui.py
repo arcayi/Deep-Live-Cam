@@ -14,12 +14,11 @@ from modules.processors.frame.core import get_frame_processors_modules
 from modules.processors.frame.face_swapper import update_face_assignments
 from modules.utilities import is_image, is_video, resolve_relative_path, has_image_extension
 
-
 global camera
 camera = None
 
 ROOT = None
-ROOT_HEIGHT = 750
+ROOT_HEIGHT = 800
 ROOT_WIDTH = 600
 
 PREVIEW = None
@@ -40,7 +39,7 @@ target_label = None
 status_label = None
 
 img_ft, vid_ft = modules.globals.file_types
-
+DEBUG_LAYOUT = True
 
 def init(start: Callable[[], None], destroy: Callable[[], None]) -> ctk.CTk:
     global ROOT, PREVIEW
@@ -50,9 +49,22 @@ def init(start: Callable[[], None], destroy: Callable[[], None]) -> ctk.CTk:
 
     return ROOT
 
-def create_root(start: Callable[[], None], destroy: Callable[[], None]) -> ctk.CTk:
-    global source_label, target_label, status_label, preview_size_var, mouth_mask_var,mask_size_var,mask_down_size_var,mask_feather_ratio_var,flip_faces_value,fps_label
+def apply_debug_style(widget, color):
+    if DEBUG_LAYOUT:
+        widget.configure(fg_color=color, border_width=1, border_color="black")
 
+def create_root(start: Callable[[], None], destroy: Callable[[], None]) -> ctk.CTk:
+    
+    global source_label, target_label, status_label
+    global preview_size_var, mouth_mask_var,mask_size_var
+    global mask_down_size_var,mask_feather_ratio_var
+    global flip_faces_value,fps_label,stickyface_var
+    global detect_face_right_value,target_face1_value
+    global target_face2_value,pseudo_threshold_var
+    global face_tracking_value,many_faces_var,pseudo_face_var
+
+    global pseudo_face_switch, stickiness_dropdown, pseudo_threshold_dropdown, clear_tracking_button
+    
     ctk.deactivate_automatic_dpi_awareness()
     ctk.set_appearance_mode('system')
     ctk.set_default_color_theme(resolve_relative_path('ui.json'))
@@ -69,94 +81,202 @@ def create_root(start: Callable[[], None], destroy: Callable[[], None]) -> ctk.C
     fps_label.place(relx=0, rely=0.04, relwidth=1)
     # Image preview area
     source_label = ctk.CTkLabel(root, text=None)
-    source_label.place(relx=0.05, rely=0.05, relwidth=0.4, relheight=0.3)
+    source_label.place(relx=0.03, rely=0.05, relwidth=0.4, relheight=0.2)
 
     target_label = ctk.CTkLabel(root, text=None)
-    target_label.place(relx=0.55, rely=0.05, relwidth=0.4, relheight=0.3)
+    target_label.place(relx=0.58, rely=0.05, relwidth=0.4, relheight=0.2)
 
     # Buttons for selecting source and target
-    select_face_button = ctk.CTkButton(root, text='Select a face/s\n(left face)(right face)', cursor='hand2', command=lambda: select_source_path())
-    select_face_button.place(relx=0.05, rely=0.33, relwidth=0.4, relheight=0.08)
+    select_face_button = ctk.CTkButton(root, text='Select a face/s\n( left face ) ( right face )', cursor='hand2', command=lambda: select_source_path())
+    select_face_button.place(relx=0.05, rely=0.23, relwidth=0.36, relheight=0.06)
 
-    select_target_button = ctk.CTkButton(root, text='Select a target', cursor='hand2', command=lambda: select_target_path())
-    select_target_button.place(relx=0.55, rely=0.33, relwidth=0.4, relheight=0.08)
+    swap_faces_button = ctk.CTkButton(root, text='↔', cursor='hand2', command=lambda: swap_faces_paths())
+    swap_faces_button.place(relx=0.46, rely=0.23, relwidth=0.10, relheight=0.06)
+
+    select_target_button = ctk.CTkButton(root, text='Select a target\n( Image / Video )', cursor='hand2', command=lambda: select_target_path())
+    select_target_button.place(relx=0.60, rely=0.23, relwidth=0.36, relheight=0.06)
 
     # Left column of switches
-    y_start = 0.43
-    y_increment = 0.06
+    y_start = 0.30
+    y_increment = 0.05
 
-    switches_left = [
-        ('Show both faces', 'both_faces'),
-        ('Detect face from right', 'detect_face_right'),
-        ('Many faces', 'many_faces'),
-        ('Show target face box','show_target_face_box'),
-        ('Show mouth mask box','show_mouth_mask_box')
-    ]
+    both_faces_var = ctk.BooleanVar(value=modules.globals.both_faces)
+    both_faces_switch = ctk.CTkSwitch(root, text='Show both faces', variable=both_faces_var, cursor='hand2',
+                                    command=lambda: setattr(modules.globals, 'both_faces', both_faces_var.get()))
+    both_faces_switch.place(relx=0.03, rely=y_start + 0*y_increment, relwidth=0.8)
 
-    for i, (text, attr) in enumerate(switches_left):
-        value = ctk.BooleanVar(value=getattr(modules.globals, attr, False))
-        switch = ctk.CTkSwitch(root, text=text, variable=value, cursor='hand2',
-                               command=lambda a=attr, v=value: setattr(modules.globals, a, v.get()))
-        switch.place(relx=0.05, rely=y_start + i*y_increment, relwidth=0.4)
-
-    # Face Enhancer switch (modified)
-    flip_faces_value = ctk.BooleanVar(value=modules.globals.fp_ui.get('flip_faces', False))
+    flip_faces_value = ctk.BooleanVar(value=modules.globals.flip_faces)
     flip_faces_switch = ctk.CTkSwitch(root, text='Flip left/right faces', variable=flip_faces_value, cursor='hand2',
                                     command=lambda: flip_faces('flip_faces', flip_faces_value.get()))
-    flip_faces_switch.place(relx=0.05, rely=y_start + 5*y_increment, relwidth=0.4)
+    flip_faces_switch.place(relx=0.03, rely=y_start + 1*y_increment, relwidth=0.4)
+
+    detect_face_right_value = ctk.BooleanVar(value=modules.globals.detect_face_right)
+    detect_face_right_switch = ctk.CTkSwitch(root, text='Detect face from right', variable=detect_face_right_value, cursor='hand2',
+                                    command=lambda: detect_faces_right('detect_face_right', detect_face_right_value.get()))
+    detect_face_right_switch.place(relx=0.03, rely=y_start + 2*y_increment, relwidth=0.4)
+
+    many_faces_var = ctk.BooleanVar(value=modules.globals.many_faces)
+    many_faces_switch = ctk.CTkSwitch(root, text='Many faces', variable=many_faces_var, cursor='hand2',
+                                    command=lambda: many_faces('many_faces', many_faces_var.get()))
+    many_faces_switch.place(relx=0.03, rely=y_start + 3*y_increment, relwidth=0.8)
+
+    show_target_face_box_var = ctk.BooleanVar(value=modules.globals.show_target_face_box)
+    show_target_face_box_switch = ctk.CTkSwitch(root, text='Show target face box', variable=show_target_face_box_var, cursor='hand2',
+                                    command=lambda: setattr(modules.globals, 'show_target_face_box', show_target_face_box_var.get()))
+    show_target_face_box_switch.place(relx=0.03, rely=y_start + 4*y_increment, relwidth=0.8)
+
+    show_mouth_mask_var = ctk.BooleanVar(value=modules.globals.show_mouth_mask_box)
+    show_mouth_mask_switch = ctk.CTkSwitch(root, text='Show mouth mask box', variable=show_mouth_mask_var, cursor='hand2',
+                                    command=lambda: setattr(modules.globals, 'show_mouth_mask_box', show_mouth_mask_var.get()))
+    show_mouth_mask_switch.place(relx=0.03, rely=y_start + 5*y_increment, relwidth=0.8)
+
 
     # Right column of switches
-    switches_right = [
-        ('Mirror webcam', 'live_mirror'),
-        ('Keep fps', 'keep_fps'),
-        ('Keep audio', 'keep_audio'),
-        ('Keep frames', 'keep_frames'),
-        ('NSFW filter', 'nsfw_filter')
-    ]
+    live_mirror_var = ctk.BooleanVar(value=modules.globals.live_mirror)
+    live_mirror_switch = ctk.CTkSwitch(root, text='live_mirror', variable=live_mirror_var, cursor='hand2',
+                                    command=lambda: setattr(modules.globals, 'live_mirror', live_mirror_var.get()))
+    live_mirror_switch.place(relx=0.55, rely=y_start + 0*y_increment, relwidth=0.4)
 
-    for i, (text, attr) in enumerate(switches_right):
-        value = ctk.BooleanVar(value=getattr(modules.globals, attr, False))
-        switch = ctk.CTkSwitch(root, text=text, variable=value, cursor='hand2',
-                               command=lambda a=attr, v=value: setattr(modules.globals, a, v.get()))
-        switch.place(relx=0.55, rely=y_start + i*y_increment, relwidth=0.4)
+    keep_fps_var = ctk.BooleanVar(value=modules.globals.keep_fps)
+    keep_fps_switch = ctk.CTkSwitch(root, text='keep_fps', variable=keep_fps_var, cursor='hand2',
+                                    command=lambda: setattr(modules.globals, 'keep_fps', keep_fps_var.get()))
+    keep_fps_switch.place(relx=0.55, rely=y_start + 1*y_increment, relwidth=0.4)
+
+    keep_audio_var = ctk.BooleanVar(value=modules.globals.keep_audio)
+    keep_audio_switch = ctk.CTkSwitch(root, text='keep_audio', variable=keep_audio_var, cursor='hand2',
+                                    command=lambda: setattr(modules.globals, 'keep_audio', keep_audio_var.get()))
+    keep_audio_switch.place(relx=0.55, rely=y_start + 2*y_increment, relwidth=0.4)
+
+    keep_frames_var = ctk.BooleanVar(value=modules.globals.keep_frames)
+    keep_frames_switch = ctk.CTkSwitch(root, text='keep_frames', variable=keep_frames_var, cursor='hand2',
+                                    command=lambda: setattr(modules.globals, 'keep_frames', keep_frames_var.get()))
+    keep_frames_switch.place(relx=0.55, rely=y_start + 3*y_increment, relwidth=0.4)
+
+    nsfw_filter_var = ctk.BooleanVar(value=modules.globals.nsfw_filter)
+    nsfw_filter_switch = ctk.CTkSwitch(root, text='NSFW filter', variable=nsfw_filter_var, cursor='hand2',
+                                    command=lambda: setattr(modules.globals, 'nsfw_filter', nsfw_filter_var.get()))
+    nsfw_filter_switch.place(relx=0.55, rely=y_start + 4*y_increment, relwidth=0.4)
 
 
     # Face Enhancer switch (modified)
-    enhancer_value = ctk.BooleanVar(value=modules.globals.fp_ui.get('face_enhancer', False))
+    enhancer_value = ctk.BooleanVar(value=modules.globals.fp_ui['face_enhancer'])
     enhancer_switch = ctk.CTkSwitch(root, text='Face Enhancer', variable=enhancer_value, cursor='hand2',
                                     command=lambda: update_tumbler('face_enhancer', enhancer_value.get()))
     enhancer_switch.place(relx=0.55, rely=y_start + 5*y_increment, relwidth=0.4)
 
+
     # Outline frame for mouth mask and dropdown
-    outline_frame = ctk.CTkFrame(root, fg_color="transparent", border_width=2, border_color="grey")
+    outline_frame = ctk.CTkFrame(root, fg_color="transparent", border_width=1, border_color="grey")
     outline_frame.place(relx=0.02, rely=y_start + 5.8*y_increment, relwidth=0.96, relheight=0.06)
 
     # Mouth mask switch
     mouth_mask_var = ctk.BooleanVar(value=modules.globals.mouth_mask)
     mouth_mask_switch = ctk.CTkSwitch(outline_frame, text='Mouth mask | Feather, Height, Width ->', variable=mouth_mask_var, cursor='hand2',
                                     command=lambda: setattr(modules.globals, 'mouth_mask', mouth_mask_var.get()))
-    mouth_mask_switch.place(relx=0.03, rely=0.1, relwidth=0.8, relheight=0.8)
+    mouth_mask_switch.place(relx=0.02, rely=0.5, relwidth=0.6, relheight=0.8, anchor="w")
 
-    # Feather ratio dropdown
-    mask_feather_ratio_var = ctk.StringVar(value="8")
-    mask_feather_ratio_size_dropdown = ctk.CTkOptionMenu(outline_frame, values=["1","2","3","4","5","6","7","8","9","10"],
-                                            variable=mask_feather_ratio_var,
-                                            command=mask_feather_ratio_size)
-    mask_feather_ratio_size_dropdown.place(relx=0.65, rely=0.1, relwidth=0.1, relheight=0.8)
+    # Size dropdown (rightmost)
+    mask_size_var = ctk.StringVar(value="11")
+    mask_size_dropdown = ctk.CTkOptionMenu(outline_frame, values=["5","6","7","8","9","10","11","12","13","14","15","16","17","18","19","20"],
+                                            variable=mask_size_var,
+                                            command=mask_size)
+    mask_size_dropdown.place(relx=0.98, rely=0.5, relwidth=0.1, relheight=0.8, anchor="e")
 
     # Down size dropdown
     mask_down_size_var = ctk.StringVar(value="5")
     mask_down_size_dropdown = ctk.CTkOptionMenu(outline_frame, values=["-15","-14","-13","-12","-11","-10","-9","-8","-7","-6","-5","-4","-3","-2","-1","1","2","3","4","5","6","7","8","9","10","11","12","13","14","15"],
                                             variable=mask_down_size_var,
                                             command=mask_down_size)
-    mask_down_size_dropdown.place(relx=0.76, rely=0.1, relwidth=0.1, relheight=0.8)
+    mask_down_size_dropdown.place(relx=0.87, rely=0.5, relwidth=0.1, relheight=0.8, anchor="e")
 
-    # Size dropdown
-    mask_size_var = ctk.StringVar(value="11")
-    mask_size_dropdown = ctk.CTkOptionMenu(outline_frame, values=["5","6","7","8","9","10","11","12","13","14","15","16","17","18","19","20"],
-                                            variable=mask_size_var,
-                                            command=mask_size)
-    mask_size_dropdown.place(relx=0.87, rely=0.1, relwidth=0.1, relheight=0.8)
+    # Feather ratio dropdown
+    mask_feather_ratio_var = ctk.StringVar(value="8")
+    mask_feather_ratio_size_dropdown = ctk.CTkOptionMenu(outline_frame, values=["1","2","3","4","5","6","7","8","9","10"],
+                                            variable=mask_feather_ratio_var,
+                                            command=mask_feather_ratio_size)
+    mask_feather_ratio_size_dropdown.place(relx=0.76, rely=0.5, relwidth=0.1, relheight=0.8, anchor="e")
+
+
+
+    # Outline frame for face tracking
+    outline_face_track_frame = ctk.CTkFrame(root, fg_color="transparent", border_width=1, border_color="grey")
+    outline_face_track_frame.place(relx=0.02, rely=y_start + 7*y_increment, relwidth=0.96, relheight=0.19)
+
+
+     # Face Tracking switch
+    face_tracking_value = ctk.BooleanVar(value=modules.globals.face_tracking)
+    face_tracking_switch = ctk.CTkSwitch(outline_face_track_frame, text='Face Tracking', variable=face_tracking_value, cursor='hand2',
+                                    command=lambda: face_tracking('face_tracking', face_tracking_value.get()))
+    face_tracking_switch.place(relx=0.02, rely=0.1, relwidth=0.4, relheight=0.3)
+
+
+    # Pseudo Face switch
+    pseudo_face_var = ctk.BooleanVar(value=modules.globals.use_pseudo_face)
+    pseudo_face_switch = ctk.CTkSwitch(outline_face_track_frame, text='Pseudo Face\n(fake face\nfor occlusions)', variable=pseudo_face_var, cursor='hand2',
+                                    command=lambda: setattr(modules.globals, 'use_pseudo_face', pseudo_face_var.get()))
+    pseudo_face_switch.place(relx=0.02, rely=0.4, relwidth=0.4, relheight=0.5)
+
+
+    # Red box frame
+    red_box_frame = ctk.CTkFrame(outline_face_track_frame, fg_color="transparent", border_width=1, border_color="#800000")
+    red_box_frame.place(relx=0.33, rely=0.02, relwidth=0.28, relheight=0.95)
+   
+    # Face Cosine Similarity label
+    similarity_label = ctk.CTkLabel(red_box_frame, text="Similarity * Position",font=("Arial", 14) )
+    similarity_label.place(relx=0.05, rely=0.05, relwidth=0.85, relheight=0.2)
+    # Target Face 1 label and value
+    target_face1_label = ctk.CTkLabel(red_box_frame, text="Target Face 1:", font=("Arial", 12))
+    target_face1_label.place(relx=0.05, rely=0.26, relwidth=0.6, relheight=0.2)
+
+    target_face1_value = ctk.CTkLabel(red_box_frame, text="0.00", anchor="w")
+    target_face1_value.place(relx=0.65, rely=0.26, relwidth=0.3, relheight=0.2)
+
+    # Target Face 2 label and value
+    target_face2_label = ctk.CTkLabel(red_box_frame, text="Target Face 2:", font=("Arial", 12))
+    target_face2_label.place(relx=0.05, rely=0.43, relwidth=0.6, relheight=0.2)
+
+    target_face2_value = ctk.CTkLabel(red_box_frame, text="0.00", anchor="w")
+    target_face2_value.place(relx=0.65, rely=0.43, relwidth=0.3, relheight=0.2)
+
+        # Target Face 2 label and value
+    target_face2_label = ctk.CTkLabel(red_box_frame, text="* MAX TWO FACE ON\nSCREEN DETECTED FROM\nLEFT OR RIGHT *", font=("Arial", 10))
+    target_face2_label.place(relx=0.05, rely=0.65, relwidth=0.9, relheight=0.3)
+
+    # Stickiness Factor label
+    stickiness_label = ctk.CTkLabel(outline_face_track_frame, text="Stickiness Factor",font=("Arial", 14))
+    stickiness_label.place(relx=0.72, rely=0.04, relwidth=0.2, relheight=0.2)
+
+    # Stickiness Greater label
+    stickiness_greater_label = ctk.CTkLabel(outline_face_track_frame, text=">",font=("Arial", 14))
+    stickiness_greater_label.place(relx=0.65, rely=0.22, relwidth=0.1, relheight=0.2)
+
+    # Stickiness Factor dropdown
+    stickyface_var = ctk.StringVar(value="0.20")
+    stickiness_dropdown = ctk.CTkOptionMenu(outline_face_track_frame, values=["0.05","0.10","0.15","0.20","0.25","0.30","0.35","0.40","0.45","0.50","0.55","0.60","0.65","0.70","0.75","0.80","0.85","0.90","0.95","1.00"],
+                                            variable=stickyface_var,
+                                            command=stickiness_factor_size)
+    stickiness_dropdown.place(relx=0.75, rely=0.22, relwidth=0.15)
+
+
+    # Stickiness Greater label
+    pseudo_threshold_greater_label = ctk.CTkLabel(outline_face_track_frame, text="<",font=("Arial", 14))
+    pseudo_threshold_greater_label.place(relx=0.65, rely=0.40, relwidth=0.1, relheight=0.2)
+
+    # Pseudo Threshold label
+    pseudo_threshold_label = ctk.CTkLabel(outline_face_track_frame, text="Pseudo Threshold",font=("Arial", 14))
+    pseudo_threshold_label.place(relx=0.72, rely=0.62, relwidth=0.2, relheight=0.2)
+    # Pseudo Threshold dropdown
+    pseudo_threshold_var = ctk.StringVar(value="0.20")
+    pseudo_threshold_dropdown = ctk.CTkOptionMenu(outline_face_track_frame, values=["0.05","0.10","0.15","0.20","0.25","0.30","0.35","0.40","0.45","0.50","0.55","0.60","0.65","0.70","0.75","0.80","0.85","0.90","0.95","1.00"],
+                                                variable=pseudo_threshold_var,
+                                                command=pseudo_threshold_size)
+    pseudo_threshold_dropdown.place(relx=0.75, rely=0.45, relwidth=0.15)
+
+
+    # Clear Face Tracking Data button
+    clear_tracking_button = ctk.CTkButton(outline_face_track_frame, text="Reset Face Tracking", 
+                                        command=clear_face_tracking_data)
+    clear_tracking_button.place(relx=0.65, rely=0.78, relwidth=0.34, relheight=0.19)
 
 
 
@@ -194,14 +314,83 @@ def create_root(start: Callable[[], None], destroy: Callable[[], None]) -> ctk.C
     donate_label.configure(text_color=ctk.ThemeManager.theme.get('URL').get('text_color'))
     donate_label.bind('<Button>', lambda event: webbrowser.open('https://buymeacoffee.com/ivideogameboss'))
 
+    if not modules.globals.face_tracking:
+        pseudo_face_switch.configure(state="disabled")
+        stickiness_dropdown.configure(state="disabled")
+        pseudo_threshold_dropdown.configure(state="disabled")
+        clear_tracking_button.configure(state="disabled")
+
     return root
+
+def swap_faces_paths() -> None:
+    global RECENT_DIRECTORY_SOURCE, RECENT_DIRECTORY_TARGET
+
+    source_path = modules.globals.source_path
+    target_path = modules.globals.target_path
+
+    if not is_image(source_path) or not is_image(target_path):
+        return
+
+    modules.globals.source_path = target_path
+    modules.globals.target_path = source_path
+
+    RECENT_DIRECTORY_SOURCE = os.path.dirname(modules.globals.source_path)
+    RECENT_DIRECTORY_TARGET = os.path.dirname(modules.globals.target_path)
+
+    PREVIEW.withdraw()
+
+    source_image = render_image_preview(modules.globals.source_path, (200, 200))
+    source_label.configure(image=source_image)
+
+    target_image = render_image_preview(modules.globals.target_path, (200, 200))
+    target_label.configure(image=target_image)
+
+def many_faces(*args):
+    global face_tracking_value
+    size = many_faces_var.get()
+    modules.globals.many_faces = size  # Use boolean directly
+    if size:  # If many faces is enabled
+        # Disable face tracking
+        modules.globals.face_tracking = False
+        face_tracking_value.set(False)  # Update the switch state
+        pseudo_face_var.set(False)  # Update the switch state
+        face_tracking()  # Call face_tracking to update UI elements
+
+
+def face_tracking(*args):
+    global pseudo_face_switch, stickiness_dropdown, pseudo_threshold_dropdown, clear_tracking_button,pseudo_face_var
+    global many_faces_var  # Add this line to access many_faces_var
+    
+    size = face_tracking_value.get()
+    modules.globals.face_tracking = size  # Use boolean directly
+    modules.globals.face_tracking_value = size
+
+    if size:  # If face tracking is enabled
+        # Disable many faces
+        modules.globals.many_faces = False
+        many_faces_var.set(False)  # Update the many faces switch state
+    
+    # Enable/disable UI elements based on face tracking state
+    if size:  # If face tracking is enabled
+        pseudo_face_switch.configure(state="normal")
+        stickiness_dropdown.configure(state="normal")
+        pseudo_threshold_dropdown.configure(state="normal")
+        clear_tracking_button.configure(state="normal")
+    else:  # If face tracking is disabled
+        pseudo_face_switch.configure(state="disabled")
+        stickiness_dropdown.configure(state="disabled")
+        pseudo_threshold_dropdown.configure(state="disabled")
+        clear_tracking_button.configure(state="disabled")
+
+    clear_face_tracking_data()
+
 
 def create_preview(parent: ctk.CTkToplevel) -> ctk.CTkToplevel:
     global preview_label, preview_slider
 
     preview = ctk.CTkToplevel(parent)
     preview.withdraw()
-    preview.title('Preview')
+    preview.title('Always Reset Face Tracking When no Faces, Switching Live Video Stream, or New Faces')
     preview.configure()
     preview.protocol('WM_DELETE_WINDOW', lambda: toggle_preview())
     preview.resizable(width=True, height=True)
@@ -230,6 +419,8 @@ def select_source_path() -> None:
         RECENT_DIRECTORY_SOURCE = os.path.dirname(modules.globals.source_path)
         image = render_image_preview(modules.globals.source_path, (200, 200))
         source_label.configure(image=image)
+        if modules.globals.face_tracking:
+            clear_face_tracking_data()
     else:
         modules.globals.source_path = None
         source_label.configure(image=None)
@@ -249,9 +440,12 @@ def select_target_path() -> None:
         RECENT_DIRECTORY_TARGET = os.path.dirname(modules.globals.target_path)
         video_frame = render_video_preview(target_path, (200, 200))
         target_label.configure(image=video_frame)
+        if modules.globals.face_tracking:
+            clear_face_tracking_data()
     else:
         modules.globals.target_path = None
         target_label.configure(image=None)
+    
 
 def select_output_path(start: Callable[[], None]) -> None:
     global RECENT_DIRECTORY_OUTPUT, img_ft, vid_ft
@@ -397,9 +591,10 @@ def webcam_preview():
     preview_label.configure(width=PREVIEW_WIDTH, height=PREVIEW_HEIGHT)
     frame_processors = get_frame_processors_modules(modules.globals.frame_processors)
     
-    # for frame_processor in frame_processors:
-    #     if hasattr(frame_processor, 'reset_face_tracking'):
-    #             frame_processor.reset_face_tracking()
+    if modules.globals.face_tracking:
+        for frame_processor in frame_processors:
+            if hasattr(frame_processor, 'reset_face_tracking'):
+                    frame_processor.reset_face_tracking()
 
     source_image_left = None
     source_image_right = None
@@ -426,12 +621,6 @@ def webcam_preview():
         if modules.globals.live_mirror:
             temp_frame = cv2.flip(temp_frame, 1)
         
-        # Get target faces
-        #target_faces = get_many_faces(temp_frame)
-        
-        # Update face assignments
-        #update_face_assignments(target_faces)
-        
         for frame_processor in frame_processors:
             temp_frame = frame_processor.process_frame([source_image_left, source_image_right], temp_frame)
         
@@ -446,6 +635,8 @@ def webcam_preview():
         
         #cv2.putText(temp_frame, f"FPS: {fps:.2f}", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
         fps_label.configure(text=f'FPS: {fps:.2f}')
+        target_face1_value.configure(text=f': {modules.globals.target_face1_score:.2f}')
+        target_face2_value.configure(text=f': {modules.globals.target_face2_score:.2f}')
         # Get current preview window size
         current_width = PREVIEW.winfo_width()
         current_height = PREVIEW.winfo_height()
@@ -517,8 +708,36 @@ def mask_feather_ratio_size(*args):
     size = mask_feather_ratio_var.get()
     modules.globals.mask_feather_ratio = int(size)
 
+def stickyface_size(*args):
+    size = stickyface_var.get()
+    modules.globals.sticky_face_value = float(size)
+    
 def flip_faces(*args):
     size = flip_faces_value.get()
     modules.globals.flip_faces = int(size)
     modules.globals.flip_faces_value = True
+    if modules.globals.face_tracking:
+        clear_face_tracking_data()
+
+def detect_faces_right(*args):
+    size = detect_face_right_value.get()
+    modules.globals.detect_face_right = int(size)
+    modules.globals.detect_face_right_value = True
+    if modules.globals.face_tracking:
+        clear_face_tracking_data()
+
+
+def stickiness_factor_size(*args):
+    size = stickyface_var.get()
+    modules.globals.sticky_face_value = float(size)
+
+def pseudo_threshold_size(*args):
+    size = pseudo_threshold_var.get()
+    modules.globals.pseudo_face_threshold = float(size)
+
+def clear_face_tracking_data(*args):
+    frame_processors = get_frame_processors_modules(modules.globals.frame_processors)
+    for frame_processor in frame_processors:
+        if hasattr(frame_processor, 'reset_face_tracking'):
+                frame_processor.reset_face_tracking()
     
