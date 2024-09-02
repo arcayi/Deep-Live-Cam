@@ -35,11 +35,21 @@ You can control the Mouth Mask exactly where you want to create a seamless blend
 
 ![MouthMaskDemo.jpg](MouthMaskDemo.jpg)
 
+## Auto One or Two Face Tracking (Max two people can be in frame)
+
+![FaceTracking.jpg](FaceTracking.jpg)
+
+(watch this video to see how Two faces tracking works)
+
+![FaceTracking.gif](FaceTracking.gif)
+
+One or Two people on webcam or video file can be tracked. iRoopDeepFaceCam detects target faces from left of frame by default. It auto assigns max two sources faces to two target faces. You can reset face tracking at anytime if you need to switch sides. You can flip faces or detect faces form right of screen.
+
 ## Live Webcam Buttons
 
 ![livecam.jpg](livecam.jpg)
 
-To start the Live webcam you can click on the 'Live' button. It takes about 30 seconds for the preview window to show up. You can change the resolution to render the live deep fake. The higher you go the slower the face swap will be. You can resize the preview window indepenent of the webcam resolution. 
+To start the Live webcam you can click on the 'Live' button. It takes about 30 seconds for the preview window to show up. You can change the resolution to render the live deep fake. The higher you go the slower the face swap will be. You can resize the preview window independent of the webcam resolution. 
 
 ## Disclaimer
 This software is meant to be a productive contribution to the rapidly growing AI-generated media industry. It will help artists with tasks such as animating a custom character or using the character as a model for clothing etc.
