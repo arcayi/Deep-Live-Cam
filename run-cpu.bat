@@ -5,7 +5,7 @@ call venv\Scripts\activate.bat
 echo Setup complete. You can now run the application.
 
 echo Running the application with cuda execution provider...
-python run.py --execution-provider cuda --execution-threads 5
+python run.py --execution-provider cpu
 
 call venv\Scripts\deactivate.bat
 
