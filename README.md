@@ -1,25 +1,37 @@
 # iRoopDeepFaceCam 
-iRoopDeepFaceCam is based on the original [roop](https://github.com/s0md3v/roop) and builds on top of [Deep-Live-Cam](https://github.com/hacksider/Deep-Live-Cam) which was also based on roop. iRoopDeepFaceCam allows you to make deepfakes with your face via a Live webcam or a video or an image file. You can also use OBS virtual camera to act as a webcam. iRoopDeepFaceCam is unique as it can work with one or two source faces. It also comes with a 'Mouth Mask' mode that allows the mouth to interact with objects.
+Get ready to dive into a whole new world of fun with iRoopDeepFaceCam! This innovative tool, inspired by the original [roop](https://github.com/s0md3v/roop) and [Deep-Live-Cam](https://github.com/hacksider/Deep-Live-Cam), lets you create deep fakes using a live webcam, video, or image file. Want to make it even more exciting? Use an OBS virtual camera to act as your webcam!
+
+What sets iRoopDeepFaceCam apart is its ability to work with one or two source faces and target one or two faces in real-time or in any video or image. Plus, the unique 'Mouth Mask' feature seamlessly blends the original mouth with the source face, allowing you to interact with objects and make your deep fakes look incredibly realistic.
+
+But that's not all! iRoopDeepFaceCam also offers face tracking, perfect for keeping the magic alive when two people are on screen or when the scene changes. You can deep fake two people simultaneously, watch videos, or live stream with this fantastic feature. With all these powerful tools, iRoopDeepFaceCam opens up endless possibilities for creativity and fun. Dive in and start creating your own deep fake adventures today!
 
 ## One face replaced with live webcam
 
-(watch this video to see how live webcam deepfake works)
+(watch this video to see how live webcam deep fake works)
 
 ![demo-gif](demo.gif)
+
+Watch as a live webcam feed transforms into an incredible deep fake before your eyes! You’ll see the magic happen in real-time, with the deep fake capturing every detail — even light reflections on the face move naturally, making the transformation look unbelievably lifelike. It's not just a deep fake; it's like watching reality blend seamlessly with creativity!
 
 (Credit: [Deep-Live-Cam](https://github.com/hacksider/Deep-Live-Cam))
 
 ## Two faces replaced on webcam
 
-(watch this video to see how Two faces work)
+(watch this video to see how Two faces deep fake work)
 
 ![DemoTwoFace.gif](DemoTwoFace.gif)
 
-## Also supports processing of an image or video file with one or two faces in source image
+Why settle for deep faking just one face when you can double the fun? With iRoopDeepFaceCam, you can use a source file with one or two faces to deep fake one or two people live on a webcam feed, video, or image. Imagine the endless possibilities for creating hilarious and entertaining YouTube videos—you and your partner can transform into anyone you want!
+
+Take it up a notch by using OBS virtual webcam on livestreams, and watch as you create live deep fakes in real-time. There's no extra processing needed, so you can instantly make yourself appear in streams! With iRoopDeepFaceCam, the power to create amazing, fun, and engaging content is right at your fingertips. The only limit is your imagination!
+
+## Supports processing of an image or video file with one or two faces plus mouth mask and face tracking on videos
 
 ![DemoTwoFaceReplace.jpg](DemoTwoFaceReplace.jpg)
 
-Choose a face (image with desired face) and the target image/video (image/video in which you want to replace the face) and click on `Start`. Open file explorer and navigate to the directory you select your output to be in. You will find a directory named `<video_title>` where you can see the frames being swapped in realtime. Once the processing is done, it will create the output file. That's it.
+With iRoopDeepFaceCam, you can process an image or video file with one or two faces, using advanced features like face tracking and the mouth mask feature for an ultra-realistic effect. Here’s how easy it is to get started: simply choose a source image with the desired face, select a target image or video where you want to replace the face, and hit Start.
+
+Then, just open your file explorer and navigate to the directory where you want your output to be saved. You'll see a folder named after your video title, where you can watch the frames being swapped in real-time! Once the processing is complete, your final output file will be ready to go. It's that simple—no complicated steps, just straightforward deep fake magic!
 
 ## Mouth Mask mode allows you to interact with objects live via webcam, video or image
 
@@ -31,11 +43,13 @@ You can also enable Mouth Mask to process a video file or an image
 
 ![MouthMask.jpg](MouthMask.jpg)
 
-You can control the Mouth Mask exactly where you want to create a seamless blend with faceswap on webcam, video or image
+With Mouth Mask mode in iRoopDeepFaceCam, you can interact with objects live via a webcam, video, or image, creating a seamless blend with the face swap. Imagine your face being deep-faked while eating, drinking, or talking—this groundbreaking technique lets you fully enjoy the magic of interactive deep fakes!
+
+What’s truly incredible about this feature is its ability to work in real-time with your webcam, giving you complete control over the Mouth Mask to place it exactly where you want it. Whether you're creating fun content or experimenting with new ideas, this real-time capability makes it super easy and entertaining to explore. Plus, when you pair it with OBS virtual camera, it takes the fun to a whole new level, allowing you to bring your deep fakes to life in live streams like never before. Dive in and experience the thrill!
 
 ![MouthMaskDemo.jpg](MouthMaskDemo.jpg)
 
-## Auto One or Two Face Tracking (Max two people can be in frame)
+## Auto One or Two Face Tracking (Max two people in frame)
 
 ![FaceTracking.jpg](FaceTracking.jpg)
 
@@ -43,13 +57,17 @@ You can control the Mouth Mask exactly where you want to create a seamless blend
 
 ![FaceTracking.gif](FaceTracking.gif)
 
-One or Two people on webcam or video file can be tracked. iRoopDeepFaceCam detects target faces from left of frame by default. It auto assigns max two sources faces to two target faces. You can reset face tracking at anytime if you need to switch sides. You can flip faces or detect faces form right of screen.
+Auto One or Two Face Tracking in iRoopDeepFaceCam takes your deep fake experience to the next level! With this feature, you can track up to two people in a frame on either a webcam or video file. The software automatically detects target faces from the left side of the frame and assigns up to two source faces to two target faces. This feature shines when two people are in the frame, allowing you to deep fake and track one or both faces with ease.
+
+Need to switch things up? You can reset face tracking at any time to switch sides, flip faces, or even detect faces from the right side of the screen. This breakthrough feature, combined with Mouth Mask mode, is incredibly powerful. It seamlessly tracks two people, even when the camera angle changes or the scene shifts, letting them interact naturally and even switch sides in the room. With iRoopDeepFaceCam's face tracking, you'll always know where the person is, making for a smooth and dynamic deep fake experience!
 
 ## Live Webcam Buttons
 
 ![livecam.jpg](livecam.jpg)
 
-To start the Live webcam you can click on the 'Live' button. It takes about 30 seconds for the preview window to show up. You can change the resolution to render the live deep fake. The higher you go the slower the face swap will be. You can resize the preview window independent of the webcam resolution. 
+To kick off the Live webcam feature in iRoopDeepFaceCam, just hit the 'Live' button. It takes about 30 seconds for the preview window to pop up. You can adjust the resolution of the live webcam to suit your needs, but keep in mind that higher resolutions may slow down the face swap process. Feel free to switch resolutions based on your computer's power and performance.
+
+No worries about the preview window size—you can resize it independently of the webcam resolution. Want to go full screen? You can make the preview window as large as you like without affecting the deep fake rendering. The rendering will stay smooth, no matter the size of your preview window. Enjoy seamless deep fake fun with complete control over your setup!  
 
 ## Disclaimer
 This software is meant to be a productive contribution to the rapidly growing AI-generated media industry. It will help artists with tasks such as animating a custom character or using the character as a model for clothing etc.
