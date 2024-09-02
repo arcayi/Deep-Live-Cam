@@ -124,28 +124,77 @@ Users of this software are expected to use this software responsibly while abidi
 -   git
 -   [ffmpeg](https://www.youtube.com/watch?v=OlNWCpFdVMA) 
 -   [visual studio 2022 runtimes (windows)](https://visualstudio.microsoft.com/visual-cpp-build-tools/)
-#### 2. Clone Repository
-    https://github.com/iVideoGameBoss/iRoopDeepFaceCam.git
 
-#### 3. Download Models
+#### 2. Clone Repository
+1. Clone the Repository:
+    First, you need to clone the repository to your computer. For this example, we'll use a PC. You can either clone the repository directly to the root drive or into a specific folder of your choice.
+
+2. Choosing a Location:
+   You can clone the repository to the root of your C:\ drive or into a specific folder, like C:\iRoopDeepFaceCam. It’s up to your personal preference.
+    - Open your command prompt or terminal.
+    - Navigate to the root of the C:\ drive or the folder where you want to clone the repository.
+        - To navigate to the root drive, you can use:
+          
+        ```cd C:\```
+        - To navigate to a specific folder, use:
+        
+        ```cd C:\iRoopDeepFaceCam```
+
+    - Run the following command to clone the repository:
+
+        ```git clone https://github.com/iVideoGameBoss/iRoopDeepFaceCam.git```
+
+    If you cloned the repository to the root drive, it will be directly in C:. If you chose a specific folder, navigate to that folder first before running the clone command.
+
+2. Navigate to the Cloned Repository:
+   Once the repository has been cloned, you need to navigate into the iRoopDeepFaceCam folder.
+    - If you cloned to the root drive, use:
+
+       ```cd iRoopDeepFaceCam```
+      
+    - If you cloned into a specific folder (e.g., C:\iRoopDeepFaceCam), you would still use:
+
+       ```cd iRoopDeepFaceCam```
+        
+Regardless of where you cloned the repository, ensure you navigate to the iRoopDeepFaceCam folder to proceed with further instructions.
+
+#### 2. Download Models
 
  1. [GFPGANv1.4](https://huggingface.co/ivideogameboss/iroopdeepfacecam/blob/main/GFPGANv1.4.pth)
  2. [inswapper_128_fp16.onnx](https://huggingface.co/ivideogameboss/iroopdeepfacecam/blob/main/inswapper_128_fp16.onnx) *(Note: Use this [replacement version](https://github.com/facefusion/facefusion-assets/releases/download/models/inswapper_128_fp16.onnx) if an issue occurs on your computer)*
 
-Then put those 2 files on the "**models**" folder
+Then put those 2 files oi the "**models**" folder
 
+#### 3. Setup VENV enviroment. We highly recommend to work with a  `venv`  to avoid issues.
+
+1. Run each command line by line from the iRoopDeepFaceCam you navigated to from the instructinons above
+
+   ```python -m venv venv```
+      
+   ```cd venv```
+      
+   ```cd Scripts```
+      
+   ```activate```
+      
+   ```cd..```
+      
+   ```cd..```
+      
 #### 4. Install dependency
-We highly recommend to work with a  `venv`  to avoid issues.
+Continuing from the instructions above, you will need to run the following command to install the necessary dependencies:
 ```
 pip install -r requirements.txt
 ```
+It's a good idea to run this command at least twice to ensure all components are installed correctly. Sometimes, running it multiple times may reveal additional files or dependencies that need to be in place for everything to be set up properly.
+
 For MAC OS, You have to install or upgrade python-tk package:
 ```
 brew install python-tk@3.10
 ```
 ##### DONE!!! If you dont have any GPU, You should be able to run roop using `python run.py` command. Keep in mind that while running the program for first time, it will download some models which can take time depending on your network connection.
 
-#### 5. Proceed if you want to use GPU acceleration (optional)
+#### 6. Proceed if you want to use GPU acceleration (optional)
 
 <details>
 <summary>Click to see the details</summary>
@@ -297,9 +346,9 @@ Additional info: [https://askubuntu.com/questions/1413377/camera-not-working-in-
 1. Clone the repository:  
   
 ```bash  
-git clone [https://github.com/hacksider/Deep-Live-Cam](https://github.com/hacksider/Deep-Live-Cam)  
+git clone https://github.com/iVideoGameBoss/iRoopDeepFaceCam.git
 ```  
-  
+
 2. Follow the installation instructions in the repository, including cuda toolkit 11.8, make 100% sure it's not cuda toolkit 12.x.  
    
 #### 5. Verify and Load Kernel Modules  
