@@ -101,59 +101,59 @@ def create_root(start: Callable[[], None], destroy: Callable[[], None]) -> ctk.C
     y_increment = 0.05
 
     both_faces_var = ctk.BooleanVar(value=modules.globals.both_faces)
-    both_faces_switch = ctk.CTkSwitch(root, text='Show both faces', variable=both_faces_var, cursor='hand2',
+    both_faces_switch = ctk.CTkSwitch(root, text='Show Both Faces', variable=both_faces_var, cursor='hand2',
                                     command=lambda: setattr(modules.globals, 'both_faces', both_faces_var.get()))
     both_faces_switch.place(relx=0.03, rely=y_start + 0*y_increment, relwidth=0.8)
 
     flip_faces_value = ctk.BooleanVar(value=modules.globals.flip_faces)
-    flip_faces_switch = ctk.CTkSwitch(root, text='Flip left/right faces', variable=flip_faces_value, cursor='hand2',
+    flip_faces_switch = ctk.CTkSwitch(root, text='Flip Left/Right Faces', variable=flip_faces_value, cursor='hand2',
                                     command=lambda: flip_faces('flip_faces', flip_faces_value.get()))
     flip_faces_switch.place(relx=0.03, rely=y_start + 1*y_increment, relwidth=0.4)
 
     detect_face_right_value = ctk.BooleanVar(value=modules.globals.detect_face_right)
-    detect_face_right_switch = ctk.CTkSwitch(root, text='Detect face from right', variable=detect_face_right_value, cursor='hand2',
+    detect_face_right_switch = ctk.CTkSwitch(root, text='Detect Face From Right', variable=detect_face_right_value, cursor='hand2',
                                     command=lambda: detect_faces_right('detect_face_right', detect_face_right_value.get()))
     detect_face_right_switch.place(relx=0.03, rely=y_start + 2*y_increment, relwidth=0.4)
 
     many_faces_var = ctk.BooleanVar(value=modules.globals.many_faces)
-    many_faces_switch = ctk.CTkSwitch(root, text='Many faces', variable=many_faces_var, cursor='hand2',
+    many_faces_switch = ctk.CTkSwitch(root, text='Many Faces', variable=many_faces_var, cursor='hand2',
                                     command=lambda: many_faces('many_faces', many_faces_var.get()))
     many_faces_switch.place(relx=0.03, rely=y_start + 3*y_increment, relwidth=0.8)
 
     show_target_face_box_var = ctk.BooleanVar(value=modules.globals.show_target_face_box)
-    show_target_face_box_switch = ctk.CTkSwitch(root, text='Show target face box', variable=show_target_face_box_var, cursor='hand2',
+    show_target_face_box_switch = ctk.CTkSwitch(root, text='Show Target Face Box', variable=show_target_face_box_var, cursor='hand2',
                                     command=lambda: setattr(modules.globals, 'show_target_face_box', show_target_face_box_var.get()))
     show_target_face_box_switch.place(relx=0.03, rely=y_start + 4*y_increment, relwidth=0.8)
 
     show_mouth_mask_var = ctk.BooleanVar(value=modules.globals.show_mouth_mask_box)
-    show_mouth_mask_switch = ctk.CTkSwitch(root, text='Show mouth mask box', variable=show_mouth_mask_var, cursor='hand2',
+    show_mouth_mask_switch = ctk.CTkSwitch(root, text='Show Mouth Mask Box', variable=show_mouth_mask_var, cursor='hand2',
                                     command=lambda: setattr(modules.globals, 'show_mouth_mask_box', show_mouth_mask_var.get()))
     show_mouth_mask_switch.place(relx=0.03, rely=y_start + 5*y_increment, relwidth=0.8)
 
 
     # Right column of switches
     live_mirror_var = ctk.BooleanVar(value=modules.globals.live_mirror)
-    live_mirror_switch = ctk.CTkSwitch(root, text='live_mirror', variable=live_mirror_var, cursor='hand2',
+    live_mirror_switch = ctk.CTkSwitch(root, text='Live Webcam Mirror', variable=live_mirror_var, cursor='hand2',
                                     command=lambda: setattr(modules.globals, 'live_mirror', live_mirror_var.get()))
     live_mirror_switch.place(relx=0.55, rely=y_start + 0*y_increment, relwidth=0.4)
 
     keep_fps_var = ctk.BooleanVar(value=modules.globals.keep_fps)
-    keep_fps_switch = ctk.CTkSwitch(root, text='keep_fps', variable=keep_fps_var, cursor='hand2',
+    keep_fps_switch = ctk.CTkSwitch(root, text='Keep fps', variable=keep_fps_var, cursor='hand2',
                                     command=lambda: setattr(modules.globals, 'keep_fps', keep_fps_var.get()))
     keep_fps_switch.place(relx=0.55, rely=y_start + 1*y_increment, relwidth=0.4)
 
     keep_audio_var = ctk.BooleanVar(value=modules.globals.keep_audio)
-    keep_audio_switch = ctk.CTkSwitch(root, text='keep_audio', variable=keep_audio_var, cursor='hand2',
+    keep_audio_switch = ctk.CTkSwitch(root, text='Keep Audio', variable=keep_audio_var, cursor='hand2',
                                     command=lambda: setattr(modules.globals, 'keep_audio', keep_audio_var.get()))
     keep_audio_switch.place(relx=0.55, rely=y_start + 2*y_increment, relwidth=0.4)
 
     keep_frames_var = ctk.BooleanVar(value=modules.globals.keep_frames)
-    keep_frames_switch = ctk.CTkSwitch(root, text='keep_frames', variable=keep_frames_var, cursor='hand2',
+    keep_frames_switch = ctk.CTkSwitch(root, text='Keep Frames', variable=keep_frames_var, cursor='hand2',
                                     command=lambda: setattr(modules.globals, 'keep_frames', keep_frames_var.get()))
     keep_frames_switch.place(relx=0.55, rely=y_start + 3*y_increment, relwidth=0.4)
 
     nsfw_filter_var = ctk.BooleanVar(value=modules.globals.nsfw_filter)
-    nsfw_filter_switch = ctk.CTkSwitch(root, text='NSFW filter', variable=nsfw_filter_var, cursor='hand2',
+    nsfw_filter_switch = ctk.CTkSwitch(root, text='NSFW Filter', variable=nsfw_filter_var, cursor='hand2',
                                     command=lambda: setattr(modules.globals, 'nsfw_filter', nsfw_filter_var.get()))
     nsfw_filter_switch.place(relx=0.55, rely=y_start + 4*y_increment, relwidth=0.4)
 
@@ -171,7 +171,7 @@ def create_root(start: Callable[[], None], destroy: Callable[[], None]) -> ctk.C
 
     # Mouth mask switch
     mouth_mask_var = ctk.BooleanVar(value=modules.globals.mouth_mask)
-    mouth_mask_switch = ctk.CTkSwitch(outline_frame, text='Mouth mask | Feather, Height, Width ->', variable=mouth_mask_var, cursor='hand2',
+    mouth_mask_switch = ctk.CTkSwitch(outline_frame, text='Mouth Mask | Feather, Height, Width ->', variable=mouth_mask_var, cursor='hand2',
                                     command=lambda: setattr(modules.globals, 'mouth_mask', mouth_mask_var.get()))
     mouth_mask_switch.place(relx=0.02, rely=0.5, relwidth=0.6, relheight=0.8, anchor="w")
 
@@ -424,6 +424,8 @@ def select_source_path() -> None:
     else:
         modules.globals.source_path = None
         source_label.configure(image=None)
+        if modules.globals.face_tracking:
+            clear_face_tracking_data()
 
 def select_target_path() -> None:
     global RECENT_DIRECTORY_TARGET, img_ft, vid_ft
@@ -435,6 +437,12 @@ def select_target_path() -> None:
         RECENT_DIRECTORY_TARGET = os.path.dirname(modules.globals.target_path)
         image = render_image_preview(modules.globals.target_path, (200, 200))
         target_label.configure(image=image)
+        if modules.globals.face_tracking:
+            clear_face_tracking_data()
+            modules.globals.face_tracking = False
+            face_tracking_value.set(False)  # Update the switch state
+            pseudo_face_var.set(False)  # Update the switch state
+            face_tracking()  # Call face_tracking to update UI elements
     elif is_video(target_path):
         modules.globals.target_path = target_path
         RECENT_DIRECTORY_TARGET = os.path.dirname(modules.globals.target_path)
@@ -445,6 +453,8 @@ def select_target_path() -> None:
     else:
         modules.globals.target_path = None
         target_label.configure(image=None)
+        if modules.globals.face_tracking:
+            clear_face_tracking_data()
     
 
 def select_output_path(start: Callable[[], None]) -> None:

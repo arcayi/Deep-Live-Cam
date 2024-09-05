@@ -20,6 +20,7 @@ last_swap_time = 0
 COOLDOWN_PERIOD = 1.0  # 1 second cooldown
 POSITION_WEIGHT = 0.4
 EMBEDDING_WEIGHT = 0.6
+BLUR_AMOUNT =12
 
 first_face_id: Optional[int] = None
 second_face_id: Optional[int] = None
@@ -193,7 +194,13 @@ def create_feathered_mask(shape, feather_amount):
             max(1, shape[0] // 2 - feather_amount))
     
     cv2.ellipse(mask, center, axes, 0, 0, 360, 1, -1)
-    mask = cv2.GaussianBlur(mask, (feather_amount*2+1, feather_amount*2+1), 0)
+    
+    # Ensure the kernel size is odd and at least 3
+    kernel_size = max(3, feather_amount * 2 + 1)
+    if kernel_size % 2 == 0:
+        kernel_size += 1
+    
+    mask = cv2.GaussianBlur(mask, (kernel_size, kernel_size), 0)
     return mask / np.max(mask)
 
 def create_mouth_mask(face: Face, frame: Frame) -> (np.ndarray, np.ndarray, tuple):
@@ -300,6 +307,7 @@ def draw_mouth_mask_visualization(frame: Frame, face: Face) -> Frame:
 
             # Combine polygon and ellipse masks
             combined_shape_mask = cv2.bitwise_and(polygon_mask, ellipse_mask)
+
 
             feather_amount = min(30, box_width // modules.globals.mask_feather_ratio, box_height // modules.globals.mask_feather_ratio)
             feathered_mask = create_feathered_mask((box_height, box_width), feather_amount)
@@ -515,6 +523,83 @@ def get_best_match(embedding: np.ndarray, face_embeddings: List[np.ndarray]) -> 
     similarities = [cosine_similarity(embedding, face_embedding) for face_embedding in face_embeddings]
     return np.argmax(similarities)
 
+def crop_face_region(frame: Frame, face: Face, padding: float = 0.2) -> Tuple[Frame, Tuple[int, int, int, int]]:
+    h, w = frame.shape[:2]
+    bbox = face.bbox
+    x1, y1, x2, y2 = map(int, bbox)
+    
+    # Add padding
+    pw, ph = int((x2-x1)*padding), int((y2-y1)*padding)
+    x1, y1 = max(0, x1-pw), max(0, y1-ph)
+    x2, y2 = min(w, x2+pw), min(h, y2+ph)
+    
+    cropped_frame = frame[y1:y2, x1:x2].copy()  # Use .copy() to ensure we're not working with a view
+    return cropped_frame, (x1, y1, x2-x1, y2-y1)
+
+def adjust_face_bbox(face: Face, crop_info: Tuple[int, int, int, int]) -> Face:
+    x, y, _, _ = crop_info
+    adjusted_face = Face()
+    adjusted_face.bbox = face.bbox - np.array([x, y, x, y])
+    adjusted_face.kps = face.kps - np.array([x, y])
+    adjusted_face.landmark_2d_106 = face.landmark_2d_106 - np.array([x, y])
+    adjusted_face.landmark_3d_68 = face.landmark_3d_68.copy()
+    adjusted_face.landmark_3d_68[:, :2] -= np.array([x, y])
+    # Copy other necessary attributes
+    for attr in ['det_score', 'gender', 'age', 'embedding', 'embedding_norm', 'normed_embedding']:
+        if hasattr(face, attr):
+            setattr(adjusted_face, attr, getattr(face, attr))
+    return adjusted_face
+
+def create_adjusted_face(face: Face, crop_info: Tuple[int, int, int, int]) -> Face:
+    x, y, _, _ = crop_info
+    adjusted_face = Face(bbox=face.bbox - np.array([x, y, x, y]),
+                         kps=face.kps - np.array([x, y]),
+                         det_score=face.det_score,
+                         landmark_3d_68=face.landmark_3d_68.copy(),
+                         landmark_2d_106=face.landmark_2d_106 - np.array([x, y]),
+                         gender=face.gender,
+                         age=face.age,
+                         embedding=face.embedding)
+
+    # Adjust 3D landmarks
+    adjusted_face.landmark_3d_68[:, :2] -= np.array([x, y])
+
+    return adjusted_face
+
+def create_ellipse_mask(shape, feather_amount=5):
+    mask = np.zeros(shape[:2], dtype=np.float32)
+    center = (shape[1] // 2, shape[0] // 2)
+    axes = (int(shape[1] * 0.42), int(shape[0] * 0.48))
+    cv2.ellipse(mask, center, axes, 0, 0, 360, 1, -1)
+    mask = cv2.GaussianBlur(mask, (0, 0), feather_amount * min(shape[:2]))
+    return mask
+
+def create_edge_blur_mask(shape, blur_amount=40):
+    h, w = shape[:2]
+    mask = np.ones((h, w), dtype=np.float32)
+    
+    # Adjust blur_amount to not exceed half the minimum dimension
+    blur_amount = min(blur_amount, min(h, w) // 4)
+    
+    # Create smoother gradients
+    v_gradient = np.power(np.linspace(0, 1, blur_amount), 2)
+    h_gradient = np.power(np.linspace(0, 1, blur_amount), 2)
+    
+    # Apply vertical gradients
+    mask[:blur_amount, :] = v_gradient[:, np.newaxis]
+    mask[-blur_amount:, :] = v_gradient[::-1, np.newaxis]
+    
+    # Apply horizontal gradients
+    mask[:, :blur_amount] *= h_gradient[np.newaxis, :]
+    mask[:, -blur_amount:] *= h_gradient[::-1][np.newaxis, :]
+    
+    return cv2.GaussianBlur(mask, (0, 0), sigmaX=blur_amount/4, sigmaY=blur_amount/4)
+
+def blend_with_mask(swapped_region, original_region, mask):
+    mask_3d = np.expand_dims(mask, axis=2).repeat(3, axis=2)
+    return (swapped_region * mask_3d + original_region * (1 - mask_3d)).astype(np.uint8)
+
+
 def process_frame(source_face: List[Face], temp_frame: Frame) -> Frame:
     # Declare global variables used for face tracking
     global face_lost_count
@@ -641,8 +726,27 @@ def process_frame(source_face: List[Face], temp_frame: Frame) -> Frame:
             else:
                 source_index = active_source_index  # Use the active source face for all targets
        
+            # Face tracking is disabled, perform simple face swap
+            # Crop the face region
+            cropped_frame, crop_info = crop_face_region(temp_frame, target_face)
+            # Create an adjusted face for the cropped region
+            # Adjust the face bbox for the cropped frame
+            adjusted_target_face = create_adjusted_face(target_face, crop_info)
+            # Perform face swapping on the cropped region
+            swapped_region = swap_face(source_face[source_index], adjusted_target_face, cropped_frame)
+
+            # Create a mask for blending with blurred edges
+            mask = create_edge_blur_mask(swapped_region.shape, blur_amount=BLUR_AMOUNT)
+            
+            # Blend the swapped region with the original cropped region
+            blended_region = blend_with_mask(swapped_region, cropped_frame, mask)
+            
+            # Paste the swapped region back into the original frame
+            x, y, w, h = crop_info
+            temp_frame[y:y+h, x:x+w] = blended_region
+
             # Perform face swapping
-            temp_frame = swap_face(source_face[source_index], target_face, temp_frame)
+            #temp_frame = swap_face(source_face[source_index], target_face, temp_frame)
             
             # Apply mouth mask if enabled
             if modules.globals.mouth_mask and i < len(mouth_masks):
@@ -789,10 +893,44 @@ def process_frame(source_face: List[Face], temp_frame: Frame) -> Frame:
                         else:
                             avg_position = np.mean(second_face_position_history, axis=0) if second_face_position_history else second_face_position
                         pseudo_face = create_pseudo_face(avg_position)
-                        temp_frame = swap_face(source_face[source_index], pseudo_face, temp_frame)
+                                                # Crop the face region
+                        cropped_frame, crop_info = crop_face_region(temp_frame, pseudo_face)
+                        # Create an adjusted face for the cropped region
+                        # Adjust the face bbox for the cropped frame
+                        adjusted_target_face = create_adjusted_face(pseudo_face, crop_info)
+                        # Perform face swapping on the cropped region
+                        swapped_region = swap_face(source_face[source_index], adjusted_target_face, cropped_frame)
+                        
+                        # Create a mask for blending with blurred edges
+                        mask = create_edge_blur_mask(swapped_region.shape, blur_amount=BLUR_AMOUNT)
+                        
+                        # Blend the swapped region with the original cropped region
+                        blended_region = blend_with_mask(swapped_region, cropped_frame, mask)
+
+                        # Paste the swapped region back into the original frame
+                        x, y, w, h = crop_info
+                        temp_frame[y:y+h, x:x+w] = blended_region
+                        # temp_frame = swap_face(source_face[source_index], pseudo_face, temp_frame)
                     else:
                         # Perform normal face swap
-                        temp_frame = swap_face(source_face[source_index], target_faces[i], temp_frame)
+                        # Crop the face region
+                        cropped_frame, crop_info = crop_face_region(temp_frame, target_faces[i])
+                        # Create an adjusted face for the cropped region
+                        # Adjust the face bbox for the cropped frame
+                        adjusted_target_face = create_adjusted_face(target_faces[i], crop_info)
+                        # Perform face swapping on the cropped region
+                        swapped_region = swap_face(source_face[source_index], adjusted_target_face, cropped_frame)
+                        # Create a mask for blending with blurred edges
+                        mask = create_edge_blur_mask(swapped_region.shape, blur_amount=BLUR_AMOUNT)
+                        
+                        # Blend the swapped region with the original cropped region
+                        blended_region = blend_with_mask(swapped_region, cropped_frame, mask)
+                        
+                        # Paste the swapped region back into the original frame
+                        x, y, w, h = crop_info
+                        temp_frame[y:y+h, x:x+w] = blended_region
+
+                        # temp_frame = swap_face(source_face[source_index], target_faces[i], temp_frame)
                     
                     processed_faces.append((target_faces[i], source_index))
                 else:
@@ -855,9 +993,25 @@ def process_frame(source_face: List[Face], temp_frame: Frame) -> Frame:
 
                             # Add current position to history
                             face_position_history.append(first_face_position)
-
+                            # Crop the face region
+                            cropped_frame, crop_info = crop_face_region(temp_frame, best_match_face)
+                            # Create an adjusted face for the cropped region
+                            # Adjust the face bbox for the cropped frame
+                            adjusted_target_face = create_adjusted_face(best_match_face, crop_info)
+                            # Perform face swapping on the cropped region
+                            swapped_region = swap_face(source_face[active_source_index], adjusted_target_face, cropped_frame)
+                            
+                            # Create a mask for blending with blurred edges
+                            mask = create_edge_blur_mask(swapped_region.shape, blur_amount=BLUR_AMOUNT)
+                            
+                            # Blend the swapped region with the original cropped region
+                            blended_region = blend_with_mask(swapped_region, cropped_frame, mask)
+                            
+                            # Paste the swapped region back into the original frame
+                            x, y, w, h = crop_info
+                            temp_frame[y:y+h, x:x+w] = blended_region
                             # Proceed with face swapping using best_match_face
-                            temp_frame = swap_face(source_face[active_source_index], best_match_face, temp_frame)
+                            #temp_frame = swap_face(source_face[active_source_index], best_match_face, temp_frame)
                         else:
                             # No good match found, but don't reset tracking immediately
                             face_lost_count += 1
@@ -871,7 +1025,24 @@ def process_frame(source_face: List[Face], temp_frame: Frame) -> Frame:
                                 if best_match_score < modules.globals.pseudo_face_threshold and pseudo_face_count < modules.globals.max_pseudo_face_count:
                                     # Create and use a pseudo face
                                     pseudo_face = create_pseudo_face(avg_position)
-                                    temp_frame = swap_face(source_face[active_source_index], pseudo_face, temp_frame)
+                                    # Crop the face region
+                                    cropped_frame, crop_info = crop_face_region(temp_frame, pseudo_face)
+                                    # Create an adjusted face for the cropped region
+                                    # Adjust the face bbox for the cropped frame
+                                    adjusted_target_face = create_adjusted_face(pseudo_face, crop_info)
+                                    # Perform face swapping on the cropped region
+                                    swapped_region = swap_face(source_face[active_source_index], adjusted_target_face, cropped_frame)
+                                    
+                                    # Create a mask for blending with blurred edges
+                                    mask = create_edge_blur_mask(swapped_region.shape, blur_amount=BLUR_AMOUNT)
+                                    
+                                    # Blend the swapped region with the original cropped region
+                                    blended_region = blend_with_mask(swapped_region, cropped_frame, mask)
+
+                                    # Paste the swapped region back into the original frame
+                                    x, y, w, h = crop_info
+                                    temp_frame[y:y+h, x:x+w] = blended_region
+                                    #temp_frame = swap_face(source_face[active_source_index], pseudo_face, temp_frame)
                                     pseudo_face_count += 1
                                     # print(pseudo_face_count)  # Debugging line
                                 else:
@@ -880,8 +1051,26 @@ def process_frame(source_face: List[Face], temp_frame: Frame) -> Frame:
                                     pseudo_face_count = 0  # Reset count if we skip
             else:
                 # Face tracking is disabled, perform simple face swap
-                temp_frame = swap_face(source_face[source_index], target_faces[i], temp_frame)
+                # Crop the face region
+                cropped_frame, crop_info = crop_face_region(temp_frame, target_faces[i])
+                # Create an adjusted face for the cropped region
+                # Adjust the face bbox for the cropped frame
+                adjusted_target_face = create_adjusted_face(target_faces[i], crop_info)
+                # Perform face swapping on the cropped region
+                swapped_region = swap_face(source_face[source_index], adjusted_target_face, cropped_frame)
+
+                # Create a mask for blending with blurred edges
+                mask = create_edge_blur_mask(swapped_region.shape, blur_amount=BLUR_AMOUNT)
                 
+                # Blend the swapped region with the original cropped region
+                blended_region = blend_with_mask(swapped_region, cropped_frame, mask)
+
+                # Paste the swapped region back into the original frame
+                x, y, w, h = crop_info
+                temp_frame[y:y+h, x:x+w] = blended_region
+                # temp_frame = cropped_frame
+                
+
             # Apply mouth mask if enabled
             if modules.globals.mouth_mask and i < len(mouth_masks):
                 mouth_mask, mouth_cutout, mouth_box = mouth_masks[i]
@@ -1049,7 +1238,7 @@ def process_frames(source_path: str, temp_frame_paths: List[str], progress: Any 
         source_image_left = get_one_face_left(cv2.imread(source_path))
     if source_image_right is None and source_path:
         source_image_right = get_one_face_right(cv2.imread(source_path))
-
+    
 
     for temp_frame_path in temp_frame_paths:
         temp_frame = cv2.imread(temp_frame_path)
@@ -1078,6 +1267,8 @@ def process_image(source_path: str, target_path: str, output_path: str) -> None:
     cv2.imwrite(output_path, result)
 
 def process_video(source_path: str, temp_frame_paths: List[str]) -> None:
+    if modules.globals.face_tracking:
+        reset_face_tracking()
     modules.processors.frame.core.process_video(source_path, temp_frame_paths, process_frames)
 
 def get_two_faces(frame: Frame) -> List[Face]:
