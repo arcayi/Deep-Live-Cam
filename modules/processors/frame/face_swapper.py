@@ -1,26 +1,33 @@
 from typing import Any, List, Optional, Tuple
-import time
 import cv2
 import insightface
 import threading
-import numpy as np
+
 import modules.globals
 import modules.processors.frame.core
+
 from modules.face_analyser import get_one_face, get_many_faces, get_one_face_left, get_one_face_right, get_face_analyser
 from modules.typing import Face, Frame
 from modules.utilities import conditional_download, resolve_relative_path, is_image, is_video
 from collections import deque
+import numpy as np
+import time
 
-first_face_lost_count: int = 0
-second_face_lost_count: int = 0
-MAX_LOST_COUNT: int = 30  # Adjust this value based on your frame rate and desired persistence
-STICKINESS_FACTOR = 0.8  # Adjust this value to change how "sticky" the assignments are
-face_position_history = deque(maxlen=30)  # Stores last 30 positions
-last_swap_time = 0
+FACE_SWAPPER = None
+THREAD_LOCK = threading.Lock()
+NAME = 'DLC.FACE-SWAPPER'
+
 COOLDOWN_PERIOD = 1.0  # 1 second cooldown
 POSITION_WEIGHT = 0.4
 EMBEDDING_WEIGHT = 0.6
 BLUR_AMOUNT =12
+MAX_LOST_COUNT = 1800  # Assuming 30 fps, this is 60 seconds
+STICKINESS_FACTOR = 0.8  # Adjust this to change how "sticky" the tracking is
+
+first_face_lost_count: int = 0
+second_face_lost_count: int = 0
+face_position_history = deque(maxlen=30)  # Stores last 30 positions
+last_swap_time = 0
 
 first_face_id: Optional[int] = None
 second_face_id: Optional[int] = None
@@ -32,16 +39,11 @@ second_face_position: Optional[Tuple[float, float]] = None
 position_threshold = 0.2  # Adjust this value to change sensitivity to position changes
 last_assignment_time: float = 0
 assignment_cooldown: float = 1.0  # 1 second cooldown
-FACE_SWAPPER = None
-THREAD_LOCK = threading.Lock()
-NAME = 'DLC.FACE-SWAPPER'
 
 first_face_embedding = None
 first_face_position = None
 first_face_id = None
 face_lost_count = 0
-MAX_LOST_COUNT = 1800  # Assuming 30 fps, this is 60 seconds
-STICKINESS_FACTOR = 0.8  # Adjust this to change how "sticky" the tracking is
 
     
 def pre_check() -> bool:
@@ -71,93 +73,6 @@ def get_face_swapper() -> Any:
             FACE_SWAPPER = insightface.model_zoo.get_model(model_path, providers=modules.globals.execution_providers)
     return FACE_SWAPPER
 
-def create_face_mask(face: Face, frame: Frame) -> np.ndarray:
-    mask = np.zeros(frame.shape[:2], dtype=np.uint8)
-    landmarks = face.landmark_2d_106
-    if landmarks is not None:
-        # Convert landmarks to int32
-        landmarks = landmarks.astype(np.int32)
-        
-        # Extract facial features
-        right_side_face = landmarks[0:16]
-        left_side_face = landmarks[17:32]
-        right_eye = landmarks[33:42]
-        right_eye_brow = landmarks[43:51]
-        left_eye = landmarks[87:96]
-        left_eye_brow = landmarks[97:105]
-
-        # Calculate forehead extension
-        right_eyebrow_top = np.min(right_eye_brow[:, 1])
-        left_eyebrow_top = np.min(left_eye_brow[:, 1])
-        eyebrow_top = min(right_eyebrow_top, left_eyebrow_top)
-        
-        face_top = np.min([right_side_face[0, 1], left_side_face[-1, 1]])
-        forehead_height = face_top - eyebrow_top
-        extended_forehead_height = int(forehead_height * 5.0)  # Extend by 50%
-
-        # Create forehead points
-        forehead_left = right_side_face[0].copy()
-        forehead_right = left_side_face[-1].copy()
-        forehead_left[1] -= extended_forehead_height
-        forehead_right[1] -= extended_forehead_height
-
-        # Combine all points to create the face outline
-        face_outline = np.vstack([
-            [forehead_left],
-            right_side_face,
-            left_side_face[::-1],  # Reverse left side to create a continuous outline
-            [forehead_right]
-        ])
-
-        # Calculate padding
-        padding = int(np.linalg.norm(right_side_face[0] - left_side_face[-1]) * 0.05)  # 5% of face width
-
-        # Create a slightly larger convex hull for padding
-        hull = cv2.convexHull(face_outline)
-        hull_padded = []
-        for point in hull:
-            x, y = point[0]
-            center = np.mean(face_outline, axis=0)
-            direction = np.array([x, y]) - center
-            direction = direction / np.linalg.norm(direction)
-            padded_point = np.array([x, y]) + direction * padding
-            hull_padded.append(padded_point)
-
-        hull_padded = np.array(hull_padded, dtype=np.int32)
-
-        # Fill the padded convex hull
-        cv2.fillConvexPoly(mask, hull_padded, 255)
-
-        # Smooth the mask edges
-        mask = cv2.GaussianBlur(mask, (5, 5), 3)
-
-    return mask
-
-def blur_edges(mask: np.ndarray, blur_amount: int = 40) -> np.ndarray:
-    blur_amount = blur_amount if blur_amount % 2 == 1 else blur_amount + 1
-    return cv2.GaussianBlur(mask, (blur_amount, blur_amount), 0)
-
-def apply_color_transfer(source, target):
-    """
-    Apply color transfer from target to source image
-    """
-    source = cv2.cvtColor(source, cv2.COLOR_BGR2LAB).astype("float32")
-    target = cv2.cvtColor(target, cv2.COLOR_BGR2LAB).astype("float32")
-
-    source_mean, source_std = cv2.meanStdDev(source)
-    target_mean, target_std = cv2.meanStdDev(target)
-
-    # Reshape mean and std to be broadcastable
-    source_mean = source_mean.reshape(1, 1, 3)
-    source_std = source_std.reshape(1, 1, 3)
-    target_mean = target_mean.reshape(1, 1, 3)
-    target_std = target_std.reshape(1, 1, 3)
-
-    # Perform the color transfer
-    source = (source - source_mean) * (target_std / source_std) + target_mean
-
-    return cv2.cvtColor(np.clip(source, 0, 255).astype("uint8"), cv2.COLOR_LAB2BGR)
-
 def swap_face(source_face: Face, target_face: Face, temp_frame: Frame) -> Frame:
     
     face_swapper = get_face_swapper()
@@ -180,424 +95,6 @@ def swap_face(source_face: Face, target_face: Face, temp_frame: Frame) -> Frame:
                      temp_frame * (1 - blurred_mask_3channel))
     
     return blended_frame.astype(np.uint8)
-
-def create_feathered_mask(shape, feather_amount):
-    mask = np.zeros(shape[:2], dtype=np.float32)
-    center = (shape[1] // 2, shape[0] // 2)
-    
-    # Ensure the feather amount doesn't exceed half the smaller dimension
-    max_feather = min(shape[0] // 2, shape[1] // 2) - 1
-    feather_amount = min(feather_amount, max_feather)
-    
-    # Ensure the axes are at least 1 pixel
-    axes = (max(1, shape[1] // 2 - feather_amount), 
-            max(1, shape[0] // 2 - feather_amount))
-    
-    cv2.ellipse(mask, center, axes, 0, 0, 360, 1, -1)
-    
-    # Ensure the kernel size is odd and at least 3
-    kernel_size = max(3, feather_amount * 2 + 1)
-    if kernel_size % 2 == 0:
-        kernel_size += 1
-    
-    mask = cv2.GaussianBlur(mask, (kernel_size, kernel_size), 0)
-    return mask / np.max(mask)
-
-def create_mouth_mask(face: Face, frame: Frame) -> (np.ndarray, np.ndarray, tuple):
-    mask = np.zeros(frame.shape[:2], dtype=np.uint8)
-    mouth_cutout = None
-    landmarks = face.landmark_2d_106
-    if landmarks is not None:
-        nose_tip = landmarks[80].astype(np.float32)
-        center_bottom = landmarks[73].astype(np.float32)
-       
-        # Recreate mask polygon
-        center_to_nose = nose_tip - center_bottom
-        largest_vector = center_to_nose  # Simplified for this example
-        base_height = largest_vector * 0.8
-        mask_height = np.linalg.norm(base_height) * modules.globals.mask_size * 0.3
-        
-        mask_top = nose_tip + center_to_nose * 0.2 + np.array([0, +modules.globals.mask_down_size ])
-        mask_bottom = mask_top + center_to_nose * (mask_height / np.linalg.norm(center_to_nose))
-        
-        mouth_points = landmarks[52:71].astype(np.float32)
-        mouth_width = np.max(mouth_points[:, 0]) - np.min(mouth_points[:, 0])
-        base_width = mouth_width * 0.4
-        mask_width = base_width * modules.globals.mask_size * 0.8
-        
-        mask_direction = np.array([-center_to_nose[1], center_to_nose[0]])
-        mask_direction /= np.linalg.norm(mask_direction)
-        
-        mask_polygon = np.array([
-            mask_top + mask_direction * (mask_width / 2),
-            mask_top - mask_direction * (mask_width / 2),
-            mask_bottom - mask_direction * (mask_width / 2),
-            mask_bottom + mask_direction * (mask_width / 2)
-        ]).astype(np.int32)
-        
-        # Ensure the mask stays within the frame
-       # mask_polygon[:, 0] = np.clip(mask_polygon[:, 0], 0, frame.shape[1] - 1)
-        #mask_polygon[:, 1] = np.clip(mask_polygon[:, 1], 0, frame.shape[0] - 1)
-        
-        # Draw the mask
-        cv2.fillPoly(mask, [mask_polygon], 255)
-        
-        # Calculate bounding box for the mouth cutout
-        min_x, min_y = np.min(mask_polygon, axis=0)
-        max_x, max_y = np.max(mask_polygon, axis=0)
-        
-        # Extract the masked area from the frame
-        mouth_cutout = frame[min_y:max_y, min_x:max_x].copy()
-    
-    return mask, mouth_cutout, (min_x, min_y, max_x, max_y)
-
-def draw_mouth_mask_visualization(frame: Frame, face: Face) -> Frame:
-    landmarks = face.landmark_2d_106
-    if landmarks is not None:
-        nose_tip = landmarks[80].astype(np.float32)
-        center_bottom = landmarks[73].astype(np.float32)
-
-        # Recreate mask polygon
-        center_to_nose = nose_tip - center_bottom
-        largest_vector = center_to_nose  # Simplified for this example
-        base_height = largest_vector * 0.8
-        mask_height = np.linalg.norm(base_height) * modules.globals.mask_size * 0.3
-
-        mask_top = nose_tip + center_to_nose * 0.2 + np.array([0, +modules.globals.mask_down_size])
-        mask_bottom = mask_top + center_to_nose * (mask_height / np.linalg.norm(center_to_nose))
-
-        mouth_points = landmarks[52:71].astype(np.float32)
-        mouth_width = np.max(mouth_points[:, 0]) - np.min(mouth_points[:, 0])
-        base_width = mouth_width * 0.4
-        mask_width = base_width * modules.globals.mask_size * 0.8
-
-        mask_direction = np.array([-center_to_nose[1], center_to_nose[0]], dtype=np.float32)
-        mask_direction /= np.linalg.norm(mask_direction)
-
-        mask_polygon = np.array([
-            mask_top + mask_direction * (mask_width / 2),
-            mask_top - mask_direction * (mask_width / 2),
-            mask_bottom - mask_direction * (mask_width / 2),
-            mask_bottom + mask_direction * (mask_width / 2)
-        ]).astype(np.int32)
-
-        # Calculate bounding box for the mouth area
-        min_x, min_y = np.min(mask_polygon, axis=0)
-        max_x, max_y = np.max(mask_polygon, axis=0)
-
-        # Ensure the box is within the frame boundaries
-        min_x = max(0, min_x)
-        min_y = max(0, min_y)
-        max_x = min(frame.shape[1], max_x)
-        max_y = min(frame.shape[0], max_y)
-        box_width = max_x - min_x
-        box_height = max_y - min_y
-
-        if box_width > 0 and box_height > 0:
-            # Create a binary mask from the polygon
-            polygon_mask = np.zeros((box_height, box_width), dtype=np.uint8)
-            adjusted_polygon = mask_polygon - [min_x, min_y]
-            cv2.fillPoly(polygon_mask, [adjusted_polygon], 255)
-
-            # Create an elliptical mask
-            ellipse_mask = np.zeros((box_height, box_width), dtype=np.uint8)
-            ellipse_center = (box_width // 2, box_height // 2)
-            ellipse_size = (int(box_width * 0.9) // 2, int(box_height * 0.85) // 2)
-            cv2.ellipse(ellipse_mask, ellipse_center, ellipse_size, 0, 0, 360, 255, -1)
-
-            # Combine polygon and ellipse masks
-            combined_shape_mask = cv2.bitwise_and(polygon_mask, ellipse_mask)
-
-
-            feather_amount = min(30, box_width // modules.globals.mask_feather_ratio, box_height // modules.globals.mask_feather_ratio)
-            feathered_mask = create_feathered_mask((box_height, box_width), feather_amount)
-
-            # Clip the feathered mask to the combined shape area
-            feathered_mask = feathered_mask * (combined_shape_mask / 255.0)
-
-            # Convert feathered mask to color image for visualization
-            feathered_mask_color = cv2.applyColorMap((feathered_mask * 255).astype(np.uint8), cv2.COLORMAP_JET)
-
-            # Overlay feathered mask on the frame
-            roi = frame[min_y:max_y, min_x:max_x]
-            blended = cv2.addWeighted(roi, 1, feathered_mask_color, 0.5, 0)
-            frame[min_y:max_y, min_x:max_x] = blended
-
-        # Draw line from center to tip
-        cv2.line(frame, tuple(center_bottom.astype(int)), tuple(nose_tip.astype(int)), (0, 0, 255), 2)
-
-        # Draw original mask polygon
-        cv2.polylines(frame, [mask_polygon], True, (0, 0, 255), 2)
-
-        # Draw ellipse outline
-        ellipse_center_global = (ellipse_center[0] + min_x, ellipse_center[1] + min_y)
-        cv2.ellipse(frame, ellipse_center_global, ellipse_size, 0, 0, 360, (255, 255, 0), 2)
-
-    return frame
-
-def apply_mouth_area(frame: np.ndarray, mouth_cutout: np.ndarray, mouth_box: tuple, face_mask: np.ndarray, mouth_polygon: np.ndarray) -> np.ndarray:
-    min_x, min_y, max_x, max_y = mouth_box
-    box_width = max_x - min_x
-    box_height = max_y - min_y
-   
-    if mouth_cutout is None or box_width is None or box_height is None or face_mask is None or mouth_polygon is None:
-        return frame
-   
-    try:
-        resized_mouth_cutout = cv2.resize(mouth_cutout, (box_width, box_height))
-        roi = frame[min_y:max_y, min_x:max_x]
-       
-        if roi.shape != resized_mouth_cutout.shape:
-            resized_mouth_cutout = cv2.resize(resized_mouth_cutout, (roi.shape[1], roi.shape[0]))
-       
-        color_corrected_mouth = apply_color_transfer(resized_mouth_cutout, roi)
-       
-        # Create a binary mask from the mouth polygon
-        polygon_mask = np.zeros(roi.shape[:2], dtype=np.uint8)
-        adjusted_polygon = mouth_polygon - [min_x, min_y] # Adjust polygon coordinates to ROI
-        cv2.fillPoly(polygon_mask, [adjusted_polygon], 255)
-
-        # Create an elliptical mask
-        ellipse_mask = np.zeros(roi.shape[:2], dtype=np.uint8)
-        ellipse_center = (box_width // 2, box_height // 2)
-        ellipse_size = (int(box_width * 0.9) // 2, int(box_height * 0.85) // 2)
-        cv2.ellipse(ellipse_mask, ellipse_center, ellipse_size, 0, 0, 360, 255, -1)
-
-        # Combine polygon and ellipse masks
-        combined_shape_mask = cv2.bitwise_and(polygon_mask, ellipse_mask)
-        
-        feather_amount = min(30, box_width // modules.globals.mask_feather_ratio, box_height // modules.globals.mask_feather_ratio)
-        feathered_mask = create_feathered_mask(resized_mouth_cutout.shape[:2], feather_amount)
-       
-        # Clip the feathered mask to the combined shape area
-        feathered_mask = feathered_mask * (combined_shape_mask / 255.0)
-        
-        # Blur the edges of the clipped mask
-        dilated_mask = cv2.dilate(feathered_mask, np.ones((3, 3), np.uint8), iterations=1)
-        blurred_mask = cv2.GaussianBlur(dilated_mask, (0, 0), sigmaX=5, sigmaY=5)
-        blurred_mask = cv2.normalize(blurred_mask, None, alpha=0, beta=1, norm_type=cv2.NORM_MINMAX)
-        
-        face_mask_roi = face_mask[min_y:max_y, min_x:max_x]
-        combined_mask = blurred_mask * (face_mask_roi / 255.0)
-       
-        combined_mask = combined_mask[:, :, np.newaxis]
-        blended = (color_corrected_mouth * combined_mask + roi * (1 - combined_mask)).astype(np.uint8)
-       
-        # Apply face mask to blended result
-        face_mask_3channel = np.repeat(face_mask_roi[:, :, np.newaxis], 3, axis=2) / 255.0
-        final_blend = blended * face_mask_3channel + roi * (1 - face_mask_3channel)
-       
-        frame[min_y:max_y, min_x:max_x] = final_blend.astype(np.uint8)
-    except Exception as e:
-        pass
-   
-    return frame
-
-def reset_face_tracking():
-    global first_face_embedding, second_face_embedding
-    global first_face_position, second_face_position
-    global first_face_id, second_face_id
-    global first_face_lost_count, second_face_lost_count
-
-    first_face_embedding = None
-    second_face_embedding = None
-    first_face_position = None
-    second_face_position = None
-    first_face_id = None
-    second_face_id = None
-    first_face_lost_count = 0
-    second_face_lost_count = 0
-    modules.globals.target_face1_score=0.00
-    modules.globals.target_face2_score=0.00
-
-def get_face_center(face: Face) -> Tuple[float, float]:
-    bbox = face.bbox
-    return ((bbox[0] + bbox[2]) / 2, (bbox[1] + bbox[3]) / 2)
-
-def extract_face_embedding(face: Face) -> np.ndarray:
-    try:
-        if hasattr(face, 'embedding') and face.embedding is not None:
-            embedding = face.embedding
-        else:
-            # If the face doesn't have an embedding, we need to generate one
-            embedding = get_face_analyser.get(face)
-        
-        # Normalize the embedding
-        return embedding / np.linalg.norm(embedding)
-    except Exception as e:
-        print(f"Error extracting face embedding: {e}")
-        # Return a default embedding (all zeros) if extraction fails
-        return np.zeros(512, dtype=np.float32)
-
-def find_best_match(embedding: np.ndarray, faces: List[Face]) -> Face:
-    if embedding is None:
-        # Handle case where embedding is None, maybe log a message or skip processing
-        print("No embedding to match against, skipping face matching.")
-        return None
-    best_match = None
-    best_similarity = -1
-
-    for face in faces:
-        face_embedding = extract_face_embedding(face)
-        similarity = cosine_similarity(embedding, face_embedding)
-        
-        if similarity > best_similarity:
-            best_similarity = similarity
-            best_match = face
-
-    return best_match
-
-def update_face_assignments(target_faces: List[Face]):
-    global first_face_embedding, second_face_embedding, first_face_position, second_face_position, last_assignment_time
-
-    if len(target_faces) == 0:
-        return
-
-    current_time = time.time()
-    if current_time - last_assignment_time < assignment_cooldown:
-        return  # Don't update assignments during cooldown period
-
-    try:
-        face_embeddings = [extract_face_embedding(face) for face in target_faces]
-        face_positions = [get_face_center(face) for face in target_faces]
-
-        if first_face_embedding is None and face_embeddings:
-            first_face_embedding = face_embeddings[0]
-            first_face_position = face_positions[0]
-            last_assignment_time = current_time
-        
-        if modules.globals.both_faces and second_face_embedding is None and len(face_embeddings) > 1:
-            second_face_embedding = face_embeddings[1]
-            second_face_position = face_positions[1]
-            last_assignment_time = current_time
-
-        if first_face_embedding is not None:
-            best_match_index = -1
-            best_match_score = -1
-            for i, (embedding, position) in enumerate(zip(face_embeddings, face_positions)):
-                embedding_similarity = cosine_similarity(first_face_embedding, embedding)
-                position_consistency = 1 / (1 + np.linalg.norm(np.array(position) - np.array(first_face_position))) if first_face_position else 0
-                combined_score = embedding_similarity * 0.7 + position_consistency * 0.3
-                
-                if combined_score > best_match_score and combined_score > 0.8:  # Increased threshold
-                    best_match_score = combined_score
-                    best_match_index = i
-
-            if best_match_index != -1:
-                first_face_embedding = face_embeddings[best_match_index]
-                first_face_position = face_positions[best_match_index]
-                last_assignment_time = current_time
-
-        if modules.globals.both_faces and second_face_embedding is not None:
-            remaining_embeddings = face_embeddings[:best_match_index] + face_embeddings[best_match_index+1:]
-            remaining_positions = face_positions[:best_match_index] + face_positions[best_match_index+1:]
-            
-            if remaining_embeddings:
-                best_match_index = -1
-                best_match_score = -1
-                for i, (embedding, position) in enumerate(zip(remaining_embeddings, remaining_positions)):
-                    embedding_similarity = cosine_similarity(second_face_embedding, embedding)
-                    position_consistency = 1 / (1 + np.linalg.norm(np.array(position) - np.array(second_face_position))) if second_face_position else 0
-                    combined_score = embedding_similarity * 0.7 + position_consistency * 0.3
-                    
-                    if combined_score > best_match_score and combined_score > 0.8:  # Increased threshold
-                        best_match_score = combined_score
-                        best_match_index = i
-
-                if best_match_index != -1:
-                    second_face_embedding = remaining_embeddings[best_match_index]
-                    second_face_position = remaining_positions[best_match_index]
-                    last_assignment_time = current_time
-
-    except Exception as e:
-        print(f"Error in update_face_assignments: {e}")
-
-def cosine_similarity(a, b):
-    if a is None or b is None:
-        # Log an error message or handle the None case appropriately
-        #print("Warning: One of the embeddings is None.")
-        return 0  # or handle it as needed
-    return np.dot(a, b) / (np.linalg.norm(a) * np.linalg.norm(b))
-
-def get_best_match(embedding: np.ndarray, face_embeddings: List[np.ndarray]) -> int:
-    similarities = [cosine_similarity(embedding, face_embedding) for face_embedding in face_embeddings]
-    return np.argmax(similarities)
-
-def crop_face_region(frame: Frame, face: Face, padding: float = 0.2) -> Tuple[Frame, Tuple[int, int, int, int]]:
-    h, w = frame.shape[:2]
-    bbox = face.bbox
-    x1, y1, x2, y2 = map(int, bbox)
-    
-    # Add padding
-    pw, ph = int((x2-x1)*padding), int((y2-y1)*padding)
-    x1, y1 = max(0, x1-pw), max(0, y1-ph)
-    x2, y2 = min(w, x2+pw), min(h, y2+ph)
-    
-    cropped_frame = frame[y1:y2, x1:x2].copy()  # Use .copy() to ensure we're not working with a view
-    return cropped_frame, (x1, y1, x2-x1, y2-y1)
-
-def adjust_face_bbox(face: Face, crop_info: Tuple[int, int, int, int]) -> Face:
-    x, y, _, _ = crop_info
-    adjusted_face = Face()
-    adjusted_face.bbox = face.bbox - np.array([x, y, x, y])
-    adjusted_face.kps = face.kps - np.array([x, y])
-    adjusted_face.landmark_2d_106 = face.landmark_2d_106 - np.array([x, y])
-    adjusted_face.landmark_3d_68 = face.landmark_3d_68.copy()
-    adjusted_face.landmark_3d_68[:, :2] -= np.array([x, y])
-    # Copy other necessary attributes
-    for attr in ['det_score', 'gender', 'age', 'embedding', 'embedding_norm', 'normed_embedding']:
-        if hasattr(face, attr):
-            setattr(adjusted_face, attr, getattr(face, attr))
-    return adjusted_face
-
-def create_adjusted_face(face: Face, crop_info: Tuple[int, int, int, int]) -> Face:
-    x, y, _, _ = crop_info
-    adjusted_face = Face(bbox=face.bbox - np.array([x, y, x, y]),
-                         kps=face.kps - np.array([x, y]),
-                         det_score=face.det_score,
-                         landmark_3d_68=face.landmark_3d_68.copy(),
-                         landmark_2d_106=face.landmark_2d_106 - np.array([x, y]),
-                         gender=face.gender,
-                         age=face.age,
-                         embedding=face.embedding)
-
-    # Adjust 3D landmarks
-    adjusted_face.landmark_3d_68[:, :2] -= np.array([x, y])
-
-    return adjusted_face
-
-def create_ellipse_mask(shape, feather_amount=5):
-    mask = np.zeros(shape[:2], dtype=np.float32)
-    center = (shape[1] // 2, shape[0] // 2)
-    axes = (int(shape[1] * 0.42), int(shape[0] * 0.48))
-    cv2.ellipse(mask, center, axes, 0, 0, 360, 1, -1)
-    mask = cv2.GaussianBlur(mask, (0, 0), feather_amount * min(shape[:2]))
-    return mask
-
-def create_edge_blur_mask(shape, blur_amount=40):
-    h, w = shape[:2]
-    mask = np.ones((h, w), dtype=np.float32)
-    
-    # Adjust blur_amount to not exceed half the minimum dimension
-    blur_amount = min(blur_amount, min(h, w) // 4)
-    
-    # Create smoother gradients
-    v_gradient = np.power(np.linspace(0, 1, blur_amount), 2)
-    h_gradient = np.power(np.linspace(0, 1, blur_amount), 2)
-    
-    # Apply vertical gradients
-    mask[:blur_amount, :] = v_gradient[:, np.newaxis]
-    mask[-blur_amount:, :] = v_gradient[::-1, np.newaxis]
-    
-    # Apply horizontal gradients
-    mask[:, :blur_amount] *= h_gradient[np.newaxis, :]
-    mask[:, -blur_amount:] *= h_gradient[::-1][np.newaxis, :]
-    
-    return cv2.GaussianBlur(mask, (0, 0), sigmaX=blur_amount/4, sigmaY=blur_amount/4)
-
-def blend_with_mask(swapped_region, original_region, mask):
-    mask_3d = np.expand_dims(mask, axis=2).repeat(3, axis=2)
-    return (swapped_region * mask_3d + original_region * (1 - mask_3d)).astype(np.uint8)
 
 
 def process_frame(source_face: List[Face], temp_frame: Frame) -> Frame:
@@ -1123,6 +620,553 @@ def process_frame(source_face: List[Face], temp_frame: Frame) -> Frame:
     # Return the processed frame
     return temp_frame
 
+def process_frames(source_path: str, temp_frame_paths: List[str], progress: Any = None) -> None:
+    
+    source_image_left = None  # Initialize variable for the selected face image
+    source_image_right = None  # Initialize variable for the selected face image
+
+    if source_image_left is None and source_path:
+        source_image_left = get_one_face_left(cv2.imread(source_path))
+    if source_image_right is None and source_path:
+        source_image_right = get_one_face_right(cv2.imread(source_path))
+    
+
+    for temp_frame_path in temp_frame_paths:
+        temp_frame = cv2.imread(temp_frame_path)
+        try:
+            result = process_frame([source_image_left,source_image_right], temp_frame)
+            cv2.imwrite(temp_frame_path, result)
+        except Exception as exception:
+            print(exception)
+            pass
+        if progress:
+            progress.update(1)
+
+def process_image(source_path: str, target_path: str, output_path: str) -> None:
+    
+    source_image_left = None  # Initialize variable for the selected face image
+    source_image_right = None  # Initialize variable for the selected face image
+
+    if source_image_left is None and source_path:
+        source_image_left = get_one_face_left(cv2.imread(source_path))
+    if source_image_right is None and source_path:
+        source_image_right = get_one_face_right(cv2.imread(source_path))
+
+    source_face = get_one_face(cv2.imread(source_path))
+    target_frame = cv2.imread(target_path)
+    result = process_frame([source_image_left,source_image_right], target_frame)
+    cv2.imwrite(output_path, result)
+
+def process_video(source_path: str, temp_frame_paths: List[str]) -> None:
+    if modules.globals.face_tracking:
+        reset_face_tracking()
+    modules.processors.frame.core.process_video(source_path, temp_frame_paths, process_frames)
+
+def create_face_mask(face: Face, frame: Frame) -> np.ndarray:
+    mask = np.zeros(frame.shape[:2], dtype=np.uint8)
+    landmarks = face.landmark_2d_106
+    if landmarks is not None:
+        # Convert landmarks to int32
+        landmarks = landmarks.astype(np.int32)
+        
+        # Extract facial features
+        right_side_face = landmarks[0:16]
+        left_side_face = landmarks[17:32]
+        right_eye = landmarks[33:42]
+        right_eye_brow = landmarks[43:51]
+        left_eye = landmarks[87:96]
+        left_eye_brow = landmarks[97:105]
+
+        # Calculate forehead extension
+        right_eyebrow_top = np.min(right_eye_brow[:, 1])
+        left_eyebrow_top = np.min(left_eye_brow[:, 1])
+        eyebrow_top = min(right_eyebrow_top, left_eyebrow_top)
+        
+        face_top = np.min([right_side_face[0, 1], left_side_face[-1, 1]])
+        forehead_height = face_top - eyebrow_top
+        extended_forehead_height = int(forehead_height * 5.0)  # Extend by 50%
+
+        # Create forehead points
+        forehead_left = right_side_face[0].copy()
+        forehead_right = left_side_face[-1].copy()
+        forehead_left[1] -= extended_forehead_height
+        forehead_right[1] -= extended_forehead_height
+
+        # Combine all points to create the face outline
+        face_outline = np.vstack([
+            [forehead_left],
+            right_side_face,
+            left_side_face[::-1],  # Reverse left side to create a continuous outline
+            [forehead_right]
+        ])
+
+        # Calculate padding
+        padding = int(np.linalg.norm(right_side_face[0] - left_side_face[-1]) * 0.05)  # 5% of face width
+
+        # Create a slightly larger convex hull for padding
+        hull = cv2.convexHull(face_outline)
+        hull_padded = []
+        for point in hull:
+            x, y = point[0]
+            center = np.mean(face_outline, axis=0)
+            direction = np.array([x, y]) - center
+            direction = direction / np.linalg.norm(direction)
+            padded_point = np.array([x, y]) + direction * padding
+            hull_padded.append(padded_point)
+
+        hull_padded = np.array(hull_padded, dtype=np.int32)
+
+        # Fill the padded convex hull
+        cv2.fillConvexPoly(mask, hull_padded, 255)
+
+        # Smooth the mask edges
+        mask = cv2.GaussianBlur(mask, (5, 5), 3)
+
+    return mask
+
+def blur_edges(mask: np.ndarray, blur_amount: int = 40) -> np.ndarray:
+    blur_amount = blur_amount if blur_amount % 2 == 1 else blur_amount + 1
+    return cv2.GaussianBlur(mask, (blur_amount, blur_amount), 0)
+
+def apply_color_transfer(source, target):
+    """
+    Apply color transfer from target to source image
+    """
+    source = cv2.cvtColor(source, cv2.COLOR_BGR2LAB).astype("float32")
+    target = cv2.cvtColor(target, cv2.COLOR_BGR2LAB).astype("float32")
+
+    source_mean, source_std = cv2.meanStdDev(source)
+    target_mean, target_std = cv2.meanStdDev(target)
+
+    # Reshape mean and std to be broadcastable
+    source_mean = source_mean.reshape(1, 1, 3)
+    source_std = source_std.reshape(1, 1, 3)
+    target_mean = target_mean.reshape(1, 1, 3)
+    target_std = target_std.reshape(1, 1, 3)
+
+    # Perform the color transfer
+    source = (source - source_mean) * (target_std / source_std) + target_mean
+
+    return cv2.cvtColor(np.clip(source, 0, 255).astype("uint8"), cv2.COLOR_LAB2BGR)
+
+def create_feathered_mask(shape, feather_amount):
+    mask = np.zeros(shape[:2], dtype=np.float32)
+    center = (shape[1] // 2, shape[0] // 2)
+    
+    # Ensure the feather amount doesn't exceed half the smaller dimension
+    max_feather = min(shape[0] // 2, shape[1] // 2) - 1
+    feather_amount = min(feather_amount, max_feather)
+    
+    # Ensure the axes are at least 1 pixel
+    axes = (max(1, shape[1] // 2 - feather_amount), 
+            max(1, shape[0] // 2 - feather_amount))
+    
+    cv2.ellipse(mask, center, axes, 0, 0, 360, 1, -1)
+    
+    # Ensure the kernel size is odd and at least 3
+    kernel_size = max(3, feather_amount * 2 + 1)
+    if kernel_size % 2 == 0:
+        kernel_size += 1
+    
+    mask = cv2.GaussianBlur(mask, (kernel_size, kernel_size), 0)
+    return mask / np.max(mask)
+
+def create_mouth_mask(face: Face, frame: Frame) -> (np.ndarray, np.ndarray, tuple):
+    mask = np.zeros(frame.shape[:2], dtype=np.uint8)
+    mouth_cutout = None
+    landmarks = face.landmark_2d_106
+    if landmarks is not None:
+        nose_tip = landmarks[80].astype(np.float32)
+        center_bottom = landmarks[73].astype(np.float32)
+       
+        # Recreate mask polygon
+        center_to_nose = nose_tip - center_bottom
+        largest_vector = center_to_nose  # Simplified for this example
+        base_height = largest_vector * 0.8
+        mask_height = np.linalg.norm(base_height) * modules.globals.mask_size * 0.3
+        
+        mask_top = nose_tip + center_to_nose * 0.2 + np.array([0, +modules.globals.mask_down_size ])
+        mask_bottom = mask_top + center_to_nose * (mask_height / np.linalg.norm(center_to_nose))
+        
+        mouth_points = landmarks[52:71].astype(np.float32)
+        mouth_width = np.max(mouth_points[:, 0]) - np.min(mouth_points[:, 0])
+        base_width = mouth_width * 0.4
+        mask_width = base_width * modules.globals.mask_size * 0.8
+        
+        mask_direction = np.array([-center_to_nose[1], center_to_nose[0]])
+        mask_direction /= np.linalg.norm(mask_direction)
+        
+        mask_polygon = np.array([
+            mask_top + mask_direction * (mask_width / 2),
+            mask_top - mask_direction * (mask_width / 2),
+            mask_bottom - mask_direction * (mask_width / 2),
+            mask_bottom + mask_direction * (mask_width / 2)
+        ]).astype(np.int32)
+        
+        # Ensure the mask stays within the frame
+       # mask_polygon[:, 0] = np.clip(mask_polygon[:, 0], 0, frame.shape[1] - 1)
+        #mask_polygon[:, 1] = np.clip(mask_polygon[:, 1], 0, frame.shape[0] - 1)
+        
+        # Draw the mask
+        cv2.fillPoly(mask, [mask_polygon], 255)
+        
+        # Calculate bounding box for the mouth cutout
+        min_x, min_y = np.min(mask_polygon, axis=0)
+        max_x, max_y = np.max(mask_polygon, axis=0)
+        
+        # Extract the masked area from the frame
+        mouth_cutout = frame[min_y:max_y, min_x:max_x].copy()
+    
+    return mask, mouth_cutout, (min_x, min_y, max_x, max_y)
+
+def draw_mouth_mask_visualization(frame: Frame, face: Face) -> Frame:
+    landmarks = face.landmark_2d_106
+    if landmarks is not None:
+        nose_tip = landmarks[80].astype(np.float32)
+        center_bottom = landmarks[73].astype(np.float32)
+
+        # Recreate mask polygon
+        center_to_nose = nose_tip - center_bottom
+        largest_vector = center_to_nose  # Simplified for this example
+        base_height = largest_vector * 0.8
+        mask_height = np.linalg.norm(base_height) * modules.globals.mask_size * 0.3
+
+        mask_top = nose_tip + center_to_nose * 0.2 + np.array([0, +modules.globals.mask_down_size])
+        mask_bottom = mask_top + center_to_nose * (mask_height / np.linalg.norm(center_to_nose))
+
+        mouth_points = landmarks[52:71].astype(np.float32)
+        mouth_width = np.max(mouth_points[:, 0]) - np.min(mouth_points[:, 0])
+        base_width = mouth_width * 0.4
+        mask_width = base_width * modules.globals.mask_size * 0.8
+
+        mask_direction = np.array([-center_to_nose[1], center_to_nose[0]], dtype=np.float32)
+        mask_direction /= np.linalg.norm(mask_direction)
+
+        mask_polygon = np.array([
+            mask_top + mask_direction * (mask_width / 2),
+            mask_top - mask_direction * (mask_width / 2),
+            mask_bottom - mask_direction * (mask_width / 2),
+            mask_bottom + mask_direction * (mask_width / 2)
+        ]).astype(np.int32)
+
+        # Calculate bounding box for the mouth area
+        min_x, min_y = np.min(mask_polygon, axis=0)
+        max_x, max_y = np.max(mask_polygon, axis=0)
+
+        # Ensure the box is within the frame boundaries
+        min_x = max(0, min_x)
+        min_y = max(0, min_y)
+        max_x = min(frame.shape[1], max_x)
+        max_y = min(frame.shape[0], max_y)
+        box_width = max_x - min_x
+        box_height = max_y - min_y
+
+        if box_width > 0 and box_height > 0:
+            # Create a binary mask from the polygon
+            polygon_mask = np.zeros((box_height, box_width), dtype=np.uint8)
+            adjusted_polygon = mask_polygon - [min_x, min_y]
+            cv2.fillPoly(polygon_mask, [adjusted_polygon], 255)
+
+            # Create an elliptical mask
+            ellipse_mask = np.zeros((box_height, box_width), dtype=np.uint8)
+            ellipse_center = (box_width // 2, box_height // 2)
+            ellipse_size = (int(box_width * 0.9) // 2, int(box_height * 0.85) // 2)
+            cv2.ellipse(ellipse_mask, ellipse_center, ellipse_size, 0, 0, 360, 255, -1)
+
+            # Combine polygon and ellipse masks
+            combined_shape_mask = cv2.bitwise_and(polygon_mask, ellipse_mask)
+
+
+            feather_amount = min(30, box_width // modules.globals.mask_feather_ratio, box_height // modules.globals.mask_feather_ratio)
+            feathered_mask = create_feathered_mask((box_height, box_width), feather_amount)
+
+            # Clip the feathered mask to the combined shape area
+            feathered_mask = feathered_mask * (combined_shape_mask / 255.0)
+
+            # Convert feathered mask to color image for visualization
+            feathered_mask_color = cv2.applyColorMap((feathered_mask * 255).astype(np.uint8), cv2.COLORMAP_JET)
+
+            # Overlay feathered mask on the frame
+            roi = frame[min_y:max_y, min_x:max_x]
+            blended = cv2.addWeighted(roi, 1, feathered_mask_color, 0.5, 0)
+            frame[min_y:max_y, min_x:max_x] = blended
+
+        # Draw line from center to tip
+        cv2.line(frame, tuple(center_bottom.astype(int)), tuple(nose_tip.astype(int)), (0, 0, 255), 2)
+
+        # Draw original mask polygon
+        cv2.polylines(frame, [mask_polygon], True, (0, 0, 255), 2)
+
+        # Draw ellipse outline
+        ellipse_center_global = (ellipse_center[0] + min_x, ellipse_center[1] + min_y)
+        cv2.ellipse(frame, ellipse_center_global, ellipse_size, 0, 0, 360, (255, 255, 0), 2)
+
+    return frame
+
+def apply_mouth_area(frame: np.ndarray, mouth_cutout: np.ndarray, mouth_box: tuple, face_mask: np.ndarray, mouth_polygon: np.ndarray) -> np.ndarray:
+    min_x, min_y, max_x, max_y = mouth_box
+    box_width = max_x - min_x
+    box_height = max_y - min_y
+   
+    if mouth_cutout is None or box_width is None or box_height is None or face_mask is None or mouth_polygon is None:
+        return frame
+   
+    try:
+        resized_mouth_cutout = cv2.resize(mouth_cutout, (box_width, box_height))
+        roi = frame[min_y:max_y, min_x:max_x]
+       
+        if roi.shape != resized_mouth_cutout.shape:
+            resized_mouth_cutout = cv2.resize(resized_mouth_cutout, (roi.shape[1], roi.shape[0]))
+       
+        color_corrected_mouth = apply_color_transfer(resized_mouth_cutout, roi)
+       
+        # Create a binary mask from the mouth polygon
+        polygon_mask = np.zeros(roi.shape[:2], dtype=np.uint8)
+        adjusted_polygon = mouth_polygon - [min_x, min_y] # Adjust polygon coordinates to ROI
+        cv2.fillPoly(polygon_mask, [adjusted_polygon], 255)
+
+        # Create an elliptical mask
+        ellipse_mask = np.zeros(roi.shape[:2], dtype=np.uint8)
+        ellipse_center = (box_width // 2, box_height // 2)
+        ellipse_size = (int(box_width * 0.9) // 2, int(box_height * 0.85) // 2)
+        cv2.ellipse(ellipse_mask, ellipse_center, ellipse_size, 0, 0, 360, 255, -1)
+
+        # Combine polygon and ellipse masks
+        combined_shape_mask = cv2.bitwise_and(polygon_mask, ellipse_mask)
+        
+        feather_amount = min(30, box_width // modules.globals.mask_feather_ratio, box_height // modules.globals.mask_feather_ratio)
+        feathered_mask = create_feathered_mask(resized_mouth_cutout.shape[:2], feather_amount)
+       
+        # Clip the feathered mask to the combined shape area
+        feathered_mask = feathered_mask * (combined_shape_mask / 255.0)
+        
+        # Blur the edges of the clipped mask
+        dilated_mask = cv2.dilate(feathered_mask, np.ones((3, 3), np.uint8), iterations=1)
+        blurred_mask = cv2.GaussianBlur(dilated_mask, (0, 0), sigmaX=5, sigmaY=5)
+        blurred_mask = cv2.normalize(blurred_mask, None, alpha=0, beta=1, norm_type=cv2.NORM_MINMAX)
+        
+        face_mask_roi = face_mask[min_y:max_y, min_x:max_x]
+        combined_mask = blurred_mask * (face_mask_roi / 255.0)
+       
+        combined_mask = combined_mask[:, :, np.newaxis]
+        blended = (color_corrected_mouth * combined_mask + roi * (1 - combined_mask)).astype(np.uint8)
+       
+        # Apply face mask to blended result
+        face_mask_3channel = np.repeat(face_mask_roi[:, :, np.newaxis], 3, axis=2) / 255.0
+        final_blend = blended * face_mask_3channel + roi * (1 - face_mask_3channel)
+       
+        frame[min_y:max_y, min_x:max_x] = final_blend.astype(np.uint8)
+    except Exception as e:
+        pass
+   
+    return frame
+
+def reset_face_tracking():
+    global first_face_embedding, second_face_embedding
+    global first_face_position, second_face_position
+    global first_face_id, second_face_id
+    global first_face_lost_count, second_face_lost_count
+
+    first_face_embedding = None
+    second_face_embedding = None
+    first_face_position = None
+    second_face_position = None
+    first_face_id = None
+    second_face_id = None
+    first_face_lost_count = 0
+    second_face_lost_count = 0
+    modules.globals.target_face1_score=0.00
+    modules.globals.target_face2_score=0.00
+
+def get_face_center(face: Face) -> Tuple[float, float]:
+    bbox = face.bbox
+    return ((bbox[0] + bbox[2]) / 2, (bbox[1] + bbox[3]) / 2)
+
+def extract_face_embedding(face: Face) -> np.ndarray:
+    try:
+        if hasattr(face, 'embedding') and face.embedding is not None:
+            embedding = face.embedding
+        else:
+            # If the face doesn't have an embedding, we need to generate one
+            embedding = get_face_analyser.get(face)
+        
+        # Normalize the embedding
+        return embedding / np.linalg.norm(embedding)
+    except Exception as e:
+        print(f"Error extracting face embedding: {e}")
+        # Return a default embedding (all zeros) if extraction fails
+        return np.zeros(512, dtype=np.float32)
+
+def find_best_match(embedding: np.ndarray, faces: List[Face]) -> Face:
+    if embedding is None:
+        # Handle case where embedding is None, maybe log a message or skip processing
+        print("No embedding to match against, skipping face matching.")
+        return None
+    best_match = None
+    best_similarity = -1
+
+    for face in faces:
+        face_embedding = extract_face_embedding(face)
+        similarity = cosine_similarity(embedding, face_embedding)
+        
+        if similarity > best_similarity:
+            best_similarity = similarity
+            best_match = face
+
+    return best_match
+
+def update_face_assignments(target_faces: List[Face]):
+    global first_face_embedding, second_face_embedding, first_face_position, second_face_position, last_assignment_time
+
+    if len(target_faces) == 0:
+        return
+
+    current_time = time.time()
+    if current_time - last_assignment_time < assignment_cooldown:
+        return  # Don't update assignments during cooldown period
+
+    try:
+        face_embeddings = [extract_face_embedding(face) for face in target_faces]
+        face_positions = [get_face_center(face) for face in target_faces]
+
+        if first_face_embedding is None and face_embeddings:
+            first_face_embedding = face_embeddings[0]
+            first_face_position = face_positions[0]
+            last_assignment_time = current_time
+        
+        if modules.globals.both_faces and second_face_embedding is None and len(face_embeddings) > 1:
+            second_face_embedding = face_embeddings[1]
+            second_face_position = face_positions[1]
+            last_assignment_time = current_time
+
+        if first_face_embedding is not None:
+            best_match_index = -1
+            best_match_score = -1
+            for i, (embedding, position) in enumerate(zip(face_embeddings, face_positions)):
+                embedding_similarity = cosine_similarity(first_face_embedding, embedding)
+                position_consistency = 1 / (1 + np.linalg.norm(np.array(position) - np.array(first_face_position))) if first_face_position else 0
+                combined_score = embedding_similarity * 0.7 + position_consistency * 0.3
+                
+                if combined_score > best_match_score and combined_score > 0.8:  # Increased threshold
+                    best_match_score = combined_score
+                    best_match_index = i
+
+            if best_match_index != -1:
+                first_face_embedding = face_embeddings[best_match_index]
+                first_face_position = face_positions[best_match_index]
+                last_assignment_time = current_time
+
+        if modules.globals.both_faces and second_face_embedding is not None:
+            remaining_embeddings = face_embeddings[:best_match_index] + face_embeddings[best_match_index+1:]
+            remaining_positions = face_positions[:best_match_index] + face_positions[best_match_index+1:]
+            
+            if remaining_embeddings:
+                best_match_index = -1
+                best_match_score = -1
+                for i, (embedding, position) in enumerate(zip(remaining_embeddings, remaining_positions)):
+                    embedding_similarity = cosine_similarity(second_face_embedding, embedding)
+                    position_consistency = 1 / (1 + np.linalg.norm(np.array(position) - np.array(second_face_position))) if second_face_position else 0
+                    combined_score = embedding_similarity * 0.7 + position_consistency * 0.3
+                    
+                    if combined_score > best_match_score and combined_score > 0.8:  # Increased threshold
+                        best_match_score = combined_score
+                        best_match_index = i
+
+                if best_match_index != -1:
+                    second_face_embedding = remaining_embeddings[best_match_index]
+                    second_face_position = remaining_positions[best_match_index]
+                    last_assignment_time = current_time
+
+    except Exception as e:
+        print(f"Error in update_face_assignments: {e}")
+
+def cosine_similarity(a, b):
+    if a is None or b is None:
+        # Log an error message or handle the None case appropriately
+        #print("Warning: One of the embeddings is None.")
+        return 0  # or handle it as needed
+    return np.dot(a, b) / (np.linalg.norm(a) * np.linalg.norm(b))
+
+def get_best_match(embedding: np.ndarray, face_embeddings: List[np.ndarray]) -> int:
+    similarities = [cosine_similarity(embedding, face_embedding) for face_embedding in face_embeddings]
+    return np.argmax(similarities)
+
+def crop_face_region(frame: Frame, face: Face, padding: float = 0.2) -> Tuple[Frame, Tuple[int, int, int, int]]:
+    h, w = frame.shape[:2]
+    bbox = face.bbox
+    x1, y1, x2, y2 = map(int, bbox)
+    
+    # Add padding
+    pw, ph = int((x2-x1)*padding), int((y2-y1)*padding)
+    x1, y1 = max(0, x1-pw), max(0, y1-ph)
+    x2, y2 = min(w, x2+pw), min(h, y2+ph)
+    
+    cropped_frame = frame[y1:y2, x1:x2].copy()  # Use .copy() to ensure we're not working with a view
+    return cropped_frame, (x1, y1, x2-x1, y2-y1)
+
+def adjust_face_bbox(face: Face, crop_info: Tuple[int, int, int, int]) -> Face:
+    x, y, _, _ = crop_info
+    adjusted_face = Face()
+    adjusted_face.bbox = face.bbox - np.array([x, y, x, y])
+    adjusted_face.kps = face.kps - np.array([x, y])
+    adjusted_face.landmark_2d_106 = face.landmark_2d_106 - np.array([x, y])
+    adjusted_face.landmark_3d_68 = face.landmark_3d_68.copy()
+    adjusted_face.landmark_3d_68[:, :2] -= np.array([x, y])
+    # Copy other necessary attributes
+    for attr in ['det_score', 'gender', 'age', 'embedding', 'embedding_norm', 'normed_embedding']:
+        if hasattr(face, attr):
+            setattr(adjusted_face, attr, getattr(face, attr))
+    return adjusted_face
+
+def create_adjusted_face(face: Face, crop_info: Tuple[int, int, int, int]) -> Face:
+    x, y, _, _ = crop_info
+    adjusted_face = Face(bbox=face.bbox - np.array([x, y, x, y]),
+                         kps=face.kps - np.array([x, y]),
+                         det_score=face.det_score,
+                         landmark_3d_68=face.landmark_3d_68.copy(),
+                         landmark_2d_106=face.landmark_2d_106 - np.array([x, y]),
+                         gender=face.gender,
+                         age=face.age,
+                         embedding=face.embedding)
+
+    # Adjust 3D landmarks
+    adjusted_face.landmark_3d_68[:, :2] -= np.array([x, y])
+
+    return adjusted_face
+
+def create_ellipse_mask(shape, feather_amount=5):
+    mask = np.zeros(shape[:2], dtype=np.float32)
+    center = (shape[1] // 2, shape[0] // 2)
+    axes = (int(shape[1] * 0.42), int(shape[0] * 0.48))
+    cv2.ellipse(mask, center, axes, 0, 0, 360, 1, -1)
+    mask = cv2.GaussianBlur(mask, (0, 0), feather_amount * min(shape[:2]))
+    return mask
+
+def create_edge_blur_mask(shape, blur_amount=40):
+    h, w = shape[:2]
+    mask = np.ones((h, w), dtype=np.float32)
+    
+    # Adjust blur_amount to not exceed half the minimum dimension
+    blur_amount = min(blur_amount, min(h, w) // 4)
+    
+    # Create smoother gradients
+    v_gradient = np.power(np.linspace(0, 1, blur_amount), 2)
+    h_gradient = np.power(np.linspace(0, 1, blur_amount), 2)
+    
+    # Apply vertical gradients
+    mask[:blur_amount, :] = v_gradient[:, np.newaxis]
+    mask[-blur_amount:, :] = v_gradient[::-1, np.newaxis]
+    
+    # Apply horizontal gradients
+    mask[:, :blur_amount] *= h_gradient[np.newaxis, :]
+    mask[:, -blur_amount:] *= h_gradient[::-1][np.newaxis, :]
+    
+    return cv2.GaussianBlur(mask, (0, 0), sigmaX=blur_amount/4, sigmaY=blur_amount/4)
+
+def blend_with_mask(swapped_region, original_region, mask):
+    mask_3d = np.expand_dims(mask, axis=2).repeat(3, axis=2)
+    return (swapped_region * mask_3d + original_region * (1 - mask_3d)).astype(np.uint8)
+
 
 def create_pseudo_face(position):
     class PseudoFace:
@@ -1229,47 +1273,6 @@ def apply_mouth_area_with_landmarks(temp_frame, mouth_cutout, mouth_box, face_ma
     else:
         return apply_mouth_area(temp_frame, mouth_cutout, mouth_box, face_mask, None)
 
-def process_frames(source_path: str, temp_frame_paths: List[str], progress: Any = None) -> None:
-    
-    source_image_left = None  # Initialize variable for the selected face image
-    source_image_right = None  # Initialize variable for the selected face image
-
-    if source_image_left is None and source_path:
-        source_image_left = get_one_face_left(cv2.imread(source_path))
-    if source_image_right is None and source_path:
-        source_image_right = get_one_face_right(cv2.imread(source_path))
-    
-
-    for temp_frame_path in temp_frame_paths:
-        temp_frame = cv2.imread(temp_frame_path)
-        try:
-            result = process_frame([source_image_left,source_image_right], temp_frame)
-            cv2.imwrite(temp_frame_path, result)
-        except Exception as exception:
-            print(exception)
-            pass
-        if progress:
-            progress.update(1)
-
-def process_image(source_path: str, target_path: str, output_path: str) -> None:
-    
-    source_image_left = None  # Initialize variable for the selected face image
-    source_image_right = None  # Initialize variable for the selected face image
-
-    if source_image_left is None and source_path:
-        source_image_left = get_one_face_left(cv2.imread(source_path))
-    if source_image_right is None and source_path:
-        source_image_right = get_one_face_right(cv2.imread(source_path))
-
-    source_face = get_one_face(cv2.imread(source_path))
-    target_frame = cv2.imread(target_path)
-    result = process_frame([source_image_left,source_image_right], target_frame)
-    cv2.imwrite(output_path, result)
-
-def process_video(source_path: str, temp_frame_paths: List[str]) -> None:
-    if modules.globals.face_tracking:
-        reset_face_tracking()
-    modules.processors.frame.core.process_video(source_path, temp_frame_paths, process_frames)
 
 def get_two_faces(frame: Frame) -> List[Face]:
     faces = get_many_faces(frame)

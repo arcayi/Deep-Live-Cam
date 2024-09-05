@@ -6,12 +6,12 @@ import os
 
 import modules.globals
 import modules.processors.frame.core
-from modules.processors.frame.face_swapper import crop_face_region,create_adjusted_face,create_edge_blur_mask,blend_with_mask,reset_face_tracking
 from modules.core import update_status
 from modules.face_analyser import get_one_face
 from modules.typing import Frame, Face
 from modules.utilities import conditional_download, resolve_relative_path, is_image, is_video
 from modules.face_analyser import get_one_face, get_many_faces, get_one_face_left, get_one_face_right, get_face_analyser
+from modules.processors.frame.face_swapper import crop_face_region,create_adjusted_face,create_edge_blur_mask,blend_with_mask,reset_face_tracking
 
 FACE_ENHANCER = None
 THREAD_SEMAPHORE = threading.Semaphore()

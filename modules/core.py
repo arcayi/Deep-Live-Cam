@@ -1,7 +1,5 @@
 import os
 import sys
-
-from modules.face_analyser import initialize_face_analyser
 # single thread doubles cuda performance - needs to be set before torch import
 if any(arg.startswith('--execution-provider') for arg in sys.argv):
     os.environ['OMP_NUM_THREADS'] = '1'
@@ -22,13 +20,13 @@ import modules.metadata
 import modules.ui as ui
 from modules.processors.frame.core import get_frame_processors_modules
 from modules.utilities import has_image_extension, is_image, is_video, detect_fps, create_video, extract_frames, get_temp_frame_paths, restore_audio, create_temp, move_temp, clean_temp, normalize_output_path
+from modules.face_analyser import initialize_face_analyser
 
 if 'ROCMExecutionProvider' in modules.globals.execution_providers:
     del torch
 
 warnings.filterwarnings('ignore', category=FutureWarning, module='insightface')
 warnings.filterwarnings('ignore', category=UserWarning, module='torchvision')
-
 
 def parse_args() -> None:
     signal.signal(signal.SIGINT, lambda signal_number, frame: destroy())

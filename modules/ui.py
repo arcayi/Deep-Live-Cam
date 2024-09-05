@@ -4,15 +4,17 @@ import customtkinter as ctk
 from typing import Callable, Tuple
 import cv2
 from PIL import Image, ImageOps
-import numpy as np
-import time
+
 import modules.globals
 import modules.metadata
 from modules.face_analyser import get_one_face, get_one_face_left, get_one_face_right,get_many_faces
 from modules.capturer import get_video_frame, get_video_frame_total
 from modules.processors.frame.core import get_frame_processors_modules
 from modules.processors.frame.face_swapper import update_face_assignments
+
 from modules.utilities import is_image, is_video, resolve_relative_path, has_image_extension
+import numpy as np
+import time
 
 global camera
 camera = None
@@ -39,7 +41,7 @@ target_label = None
 status_label = None
 
 img_ft, vid_ft = modules.globals.file_types
-DEBUG_LAYOUT = True
+
 
 def init(start: Callable[[], None], destroy: Callable[[], None]) -> ctk.CTk:
     global ROOT, PREVIEW
@@ -48,10 +50,6 @@ def init(start: Callable[[], None], destroy: Callable[[], None]) -> ctk.CTk:
     PREVIEW = create_preview(ROOT)
 
     return ROOT
-
-def apply_debug_style(widget, color):
-    if DEBUG_LAYOUT:
-        widget.configure(fg_color=color, border_width=1, border_color="black")
 
 def create_root(start: Callable[[], None], destroy: Callable[[], None]) -> ctk.CTk:
     
@@ -322,69 +320,6 @@ def create_root(start: Callable[[], None], destroy: Callable[[], None]) -> ctk.C
 
     return root
 
-def swap_faces_paths() -> None:
-    global RECENT_DIRECTORY_SOURCE, RECENT_DIRECTORY_TARGET
-
-    source_path = modules.globals.source_path
-    target_path = modules.globals.target_path
-
-    if not is_image(source_path) or not is_image(target_path):
-        return
-
-    modules.globals.source_path = target_path
-    modules.globals.target_path = source_path
-
-    RECENT_DIRECTORY_SOURCE = os.path.dirname(modules.globals.source_path)
-    RECENT_DIRECTORY_TARGET = os.path.dirname(modules.globals.target_path)
-
-    PREVIEW.withdraw()
-
-    source_image = render_image_preview(modules.globals.source_path, (200, 200))
-    source_label.configure(image=source_image)
-
-    target_image = render_image_preview(modules.globals.target_path, (200, 200))
-    target_label.configure(image=target_image)
-
-def many_faces(*args):
-    global face_tracking_value
-    size = many_faces_var.get()
-    modules.globals.many_faces = size  # Use boolean directly
-    if size:  # If many faces is enabled
-        # Disable face tracking
-        modules.globals.face_tracking = False
-        face_tracking_value.set(False)  # Update the switch state
-        pseudo_face_var.set(False)  # Update the switch state
-        face_tracking()  # Call face_tracking to update UI elements
-
-
-def face_tracking(*args):
-    global pseudo_face_switch, stickiness_dropdown, pseudo_threshold_dropdown, clear_tracking_button,pseudo_face_var
-    global many_faces_var  # Add this line to access many_faces_var
-    
-    size = face_tracking_value.get()
-    modules.globals.face_tracking = size  # Use boolean directly
-    modules.globals.face_tracking_value = size
-
-    if size:  # If face tracking is enabled
-        # Disable many faces
-        modules.globals.many_faces = False
-        many_faces_var.set(False)  # Update the many faces switch state
-    
-    # Enable/disable UI elements based on face tracking state
-    if size:  # If face tracking is enabled
-        pseudo_face_switch.configure(state="normal")
-        stickiness_dropdown.configure(state="normal")
-        pseudo_threshold_dropdown.configure(state="normal")
-        clear_tracking_button.configure(state="normal")
-    else:  # If face tracking is disabled
-        pseudo_face_switch.configure(state="disabled")
-        stickiness_dropdown.configure(state="disabled")
-        pseudo_threshold_dropdown.configure(state="disabled")
-        clear_tracking_button.configure(state="disabled")
-
-    clear_face_tracking_data()
-
-
 def create_preview(parent: ctk.CTkToplevel) -> ctk.CTkToplevel:
     global preview_label, preview_slider
 
@@ -427,6 +362,29 @@ def select_source_path() -> None:
         if modules.globals.face_tracking:
             clear_face_tracking_data()
 
+def swap_faces_paths() -> None:
+    global RECENT_DIRECTORY_SOURCE, RECENT_DIRECTORY_TARGET
+
+    source_path = modules.globals.source_path
+    target_path = modules.globals.target_path
+
+    if not is_image(source_path) or not is_image(target_path):
+        return
+
+    modules.globals.source_path = target_path
+    modules.globals.target_path = source_path
+
+    RECENT_DIRECTORY_SOURCE = os.path.dirname(modules.globals.source_path)
+    RECENT_DIRECTORY_TARGET = os.path.dirname(modules.globals.target_path)
+
+    PREVIEW.withdraw()
+
+    source_image = render_image_preview(modules.globals.source_path, (200, 200))
+    source_label.configure(image=source_image)
+
+    target_image = render_image_preview(modules.globals.target_path, (200, 200))
+    target_label.configure(image=target_image)
+
 def select_target_path() -> None:
     global RECENT_DIRECTORY_TARGET, img_ft, vid_ft
 
@@ -455,7 +413,6 @@ def select_target_path() -> None:
         target_label.configure(image=None)
         if modules.globals.face_tracking:
             clear_face_tracking_data()
-    
 
 def select_output_path(start: Callable[[], None]) -> None:
     global RECENT_DIRECTORY_OUTPUT, img_ft, vid_ft
@@ -486,6 +443,7 @@ def check_and_ignore_nsfw(target, destroy: Callable = None) -> bool:
         update_status('Processing ignored!')
         return True
     else: return False
+
 
 def fit_image_to_size(image, width: int, height: int):
     if width is None and height is None:
@@ -705,7 +663,45 @@ def update_camera_resolution():
         camera.set(cv2.CAP_PROP_FRAME_WIDTH, PREVIEW_DEFAULT_WIDTH)
         camera.set(cv2.CAP_PROP_FRAME_HEIGHT, PREVIEW_DEFAULT_HEIGHT)
         camera.set(cv2.CAP_PROP_FPS, 60)  # You may want to make FPS configurable as well
-        
+
+def many_faces(*args):
+    global face_tracking_value
+    size = many_faces_var.get()
+    modules.globals.many_faces = size  # Use boolean directly
+    if size:  # If many faces is enabled
+        # Disable face tracking
+        modules.globals.face_tracking = False
+        face_tracking_value.set(False)  # Update the switch state
+        pseudo_face_var.set(False)  # Update the switch state
+        face_tracking()  # Call face_tracking to update UI elements
+
+def face_tracking(*args):
+    global pseudo_face_switch, stickiness_dropdown, pseudo_threshold_dropdown, clear_tracking_button,pseudo_face_var
+    global many_faces_var  # Add this line to access many_faces_var
+    
+    size = face_tracking_value.get()
+    modules.globals.face_tracking = size  # Use boolean directly
+    modules.globals.face_tracking_value = size
+
+    if size:  # If face tracking is enabled
+        # Disable many faces
+        modules.globals.many_faces = False
+        many_faces_var.set(False)  # Update the many faces switch state
+    
+    # Enable/disable UI elements based on face tracking state
+    if size:  # If face tracking is enabled
+        pseudo_face_switch.configure(state="normal")
+        stickiness_dropdown.configure(state="normal")
+        pseudo_threshold_dropdown.configure(state="normal")
+        clear_tracking_button.configure(state="normal")
+    else:  # If face tracking is disabled
+        pseudo_face_switch.configure(state="disabled")
+        stickiness_dropdown.configure(state="disabled")
+        pseudo_threshold_dropdown.configure(state="disabled")
+        clear_tracking_button.configure(state="disabled")
+
+    clear_face_tracking_data()
+
 def mask_size(*args):
     size = mask_size_var.get()
     modules.globals.mask_size = int(size)
@@ -750,4 +746,3 @@ def clear_face_tracking_data(*args):
     for frame_processor in frame_processors:
         if hasattr(frame_processor, 'reset_face_tracking'):
                 frame_processor.reset_face_tracking()
-    
