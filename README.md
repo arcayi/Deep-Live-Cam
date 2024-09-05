@@ -192,9 +192,56 @@ For MAC OS, You have to install or upgrade python-tk package:
 ```
 brew install python-tk@3.10
 ```
+#### 5. Run iRoopDeepFaceCam
+Now you should be ready to run iRoopDeepFaceCam. 
+```
+python run.py --execution-provider cpu
+```
 ##### DONE!!! If you dont have any GPU, You should be able to run roop using `python run.py` command. Keep in mind that while running the program for first time, it will download some models which can take time depending on your network connection.
 
-#### 6. Proceed if you want to use GPU acceleration (optional)
+Now if you have a GPU you can proceeed with step 7. Here's a quick tip, you can run the CPU or GPU like this. 
+
+CPU
+```
+python run.py --execution-provider cpu
+```
+
+GPU - must have CUDA installed. Follow step 7
+```
+python run.py --execution-provider cuda --execution-threads 5
+```
+
+You can also click on the bat files that make it easy to run again. 
+
+run-cpu.bat
+
+run-cuda.bat
+
+To start iRoopDeepFaceCam without using the batch file, you can use the command prompt instead.
+
+Here’s how to do it. Using your command prompt go to the **iRoopDeepFaceCam** directory. Where you see run.py is the root directory. Using the command prompt type the following one line at a time.
+
+```
+cd venv
+
+cd Scripts
+
+activate
+
+cd..
+
+cd..
+
+python run.py --execution-provider cpu
+
+```
+
+If you have a GPU then the last line would be
+```
+python run.py --execution-threads 5 --execution-provider cuda
+```
+
+#### 7. Proceed if you want to use GPU acceleration (optional)
 
 <details>
 <summary>Click to see the details</summary>
