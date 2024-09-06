@@ -245,8 +245,6 @@ python run.py --execution-threads 5 --execution-provider cuda
 
 #### 7. Proceed if you want to use GPU acceleration (optional)
 
-<details>
-<summary>Click to see the details</summary>
 
 ### CUDA Execution Provider (Nvidia)*
 
@@ -314,7 +312,7 @@ pip install onnxruntime-openvino==1.15.0
 ```
 python run.py --execution-provider openvino
 ```
-</details>
+
 
 
 Additional command line arguments are given below. To learn out what they do, check [this guide](https://github.com/s0md3v/roop/wiki/Advanced-Options).
