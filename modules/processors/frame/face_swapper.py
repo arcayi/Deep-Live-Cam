@@ -40,9 +40,6 @@ position_threshold = 0.2  # Adjust this value to change sensitivity to position 
 last_assignment_time: float = 0
 assignment_cooldown: float = 1.0  # 1 second cooldown
 
-first_face_embedding = None
-first_face_position = None
-first_face_id = None
 face_lost_count = 0
 
     
