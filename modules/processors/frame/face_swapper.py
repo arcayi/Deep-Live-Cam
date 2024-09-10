@@ -324,9 +324,22 @@ def process_frame(source_face: List[Face], temp_frame: Frame) -> Frame:
                         first_position_consistency = 1 / (1 + np.linalg.norm(np.array(target_position) - np.array(first_face_position))) if first_face_position else 0
                         second_position_consistency = 1 / (1 + np.linalg.norm(np.array(target_position) - np.array(second_face_position))) if second_face_position else 0
 
-                        # Combine similarity and position consistency scores
-                        first_score = first_similarity * 0.6 + first_position_consistency * 0.4
-                        second_score = second_similarity * 0.6 + second_position_consistency * 0.4
+                        # Get these values from modules.globals set by UI
+                        EMBEDDING_WEIGHT = modules.globals.embedding_weight_size
+                        POSITION_WEIGHT = modules.globals.position_size
+                        total = modules.globals.old_embedding_weight  + modules.globals.new_embedding_weight 
+                        OLD_WEIGHT  = modules.globals.old_embedding_weight  / total 
+                        NEW_WEIGHT  = modules.globals.new_embedding_weight  / total 
+                        TOTAL_WEIGHT = EMBEDDING_WEIGHT * modules.globals.weight_distribution_size + POSITION_WEIGHT
+
+
+                        # Combine embedding similarity and position consistency for overall match score
+                        first_score = ((EMBEDDING_WEIGHT * first_similarity + 
+                                        POSITION_WEIGHT * first_position_consistency)/TOTAL_WEIGHT)
+                        
+                        second_score = ((EMBEDDING_WEIGHT * second_similarity + 
+                                        POSITION_WEIGHT * second_position_consistency)/TOTAL_WEIGHT)
+
 
                         # Apply stickiness factor to favor previously tracked faces
                         if face_id == first_face_id:
@@ -342,24 +355,28 @@ def process_frame(source_face: List[Face], temp_frame: Frame) -> Frame:
                         # Determine which face to track based on scores
                         if first_score > second_score:
                             if first_score > modules.globals.sticky_face_value:
+                               
                                 # Update first face tracking
                                 source_index = source_face_order[0]
-                                first_face_embedding = 0.9 * first_face_embedding + 0.1 * target_embedding
+                                first_face_embedding = OLD_WEIGHT * first_face_embedding + NEW_WEIGHT * target_embedding
                                 first_face_position = target_position
                                 first_face_id = face_id
                                 first_face_position_history.append(first_face_position)
+                            
                             elif modules.globals.use_pseudo_face and first_score < modules.globals.pseudo_face_threshold:
                                 # Use pseudo face if score is below threshold
                                 use_pseudo_face = True
                                 source_index = source_face_order[0]
                         else:
                             if second_score > modules.globals.sticky_face_value:
+                                
                                 # Update second face tracking
                                 source_index = source_face_order[1]
-                                second_face_embedding = 0.9 * second_face_embedding + 0.1 * target_embedding
+                                second_face_embedding = OLD_WEIGHT * second_face_embedding + NEW_WEIGHT * target_embedding
                                 second_face_position = target_position
                                 second_face_id = face_id
                                 second_face_position_history.append(second_face_position)
+                            
                             elif modules.globals.use_pseudo_face and second_score < modules.globals.pseudo_face_threshold:
                                 # Use pseudo face if score is below threshold
                                 use_pseudo_face = True
@@ -457,8 +474,18 @@ def process_frame(source_face: List[Face], temp_frame: Frame) -> Frame:
                             # Calculate position consistency
                             position_consistency = 1 / (1 + np.linalg.norm(np.array(target_position) - np.array(avg_position)) + 1e-6)
 
+                            # Get these values from modules.globals set by UI
+                            EMBEDDING_WEIGHT = modules.globals.embedding_weight_size
+                            POSITION_WEIGHT = modules.globals.position_size
+                            total = modules.globals.old_embedding_weight  + modules.globals.new_embedding_weight 
+                            OLD_WEIGHT  = modules.globals.old_embedding_weight  / total 
+                            NEW_WEIGHT  = modules.globals.new_embedding_weight  / total 
+                            TOTAL_WEIGHT = EMBEDDING_WEIGHT * modules.globals.weight_distribution_size + POSITION_WEIGHT
+
+
                             # Combine embedding similarity and position consistency for overall match score
-                            match_score = EMBEDDING_WEIGHT * embedding_similarity + POSITION_WEIGHT * position_consistency
+                            match_score = ((EMBEDDING_WEIGHT * embedding_similarity + 
+                                           POSITION_WEIGHT * position_consistency)/TOTAL_WEIGHT)
 
                             # Apply stickiness factor if this is the previously tracked face
                             if id(face) == first_face_id:
@@ -477,13 +504,10 @@ def process_frame(source_face: List[Face], temp_frame: Frame) -> Frame:
                             face_lost_count = 0
                             pseudo_face_count = 0  # Reset pseudo face count
                             
-                            # Only update tracking if cooldown period has passed
-                            if current_time - last_swap_time > COOLDOWN_PERIOD:
-                                # Update face embedding with a weighted average (90% old, 10% new)
-                                first_face_embedding = 0.9 * first_face_embedding + 0.1 * extract_face_embedding(best_match_face)
-                                first_face_position = get_face_center(best_match_face)
-                                first_face_id = id(best_match_face)
-                                last_swap_time = current_time
+                            # Update face embedding with a weighted average (90% old, 10% new)
+                            first_face_embedding = OLD_WEIGHT * first_face_embedding + NEW_WEIGHT * extract_face_embedding(best_match_face)
+                            first_face_position = get_face_center(best_match_face)
+                            first_face_id = id(best_match_face)
 
                             # Add current position to history
                             face_position_history.append(first_face_position)
