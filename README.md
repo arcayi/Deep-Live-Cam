@@ -7,6 +7,14 @@ What sets iRoopDeepFaceCam apart is its ability to work with one or two source f
 
 But that's not all! iRoopDeepFaceCam also offers face tracking, perfect for keeping the magic alive when two people are on screen or when the scene changes. You can deep fake two people simultaneously, watch videos, or live stream with this fantastic feature. With all these powerful tools, iRoopDeepFaceCam opens up endless possibilities for creativity and fun. Dive in and start creating your own deep fake adventures today!
 
+## Live Webcam Buttons
+
+![livecam-jpg](images/livecam.jpg)
+
+To kick off the Live webcam feature in iRoopDeepFaceCam, just hit the 'Live' button. It takes about 30 seconds for the preview window to pop up. You can adjust the resolution of the live webcam to suit your needs, but keep in mind that higher resolutions may slow down the face swap process. Feel free to switch resolutions based on your computer's power and performance.
+
+No worries about the preview window size—you can resize it independently of the webcam resolution. Want to go full screen? You can make the preview window as large as you like without affecting the deep fake rendering. The rendering will stay smooth, no matter the size of your preview window. Enjoy seamless deep fake fun with complete control over your setup!  
+
 ## One face replaced with live webcam
 
 (watch this video to see how live webcam deep fake works)
@@ -63,13 +71,33 @@ Auto One or Two Face Tracking in iRoopDeepFaceCam takes your deep fake experienc
 
 Need to switch things up? You can reset face tracking at any time to switch sides, flip faces, or even detect faces from the right side of the screen. This breakthrough feature, combined with Mouth Mask mode, is incredibly powerful. It seamlessly tracks two people, even when the camera angle changes or the scene shifts, letting them interact naturally and even switch sides in the room. With iRoopDeepFaceCam's face tracking, you'll always know where the person is, making for a smooth and dynamic deep fake experience!
 
-## Live Webcam Buttons
+## Face Tracking Settings
 
-![livecam-jpg](images/livecam.jpg)
+![FaceSettings-jpg](images/FaceSettings.jpg)
 
-To kick off the Live webcam feature in iRoopDeepFaceCam, just hit the 'Live' button. It takes about 30 seconds for the preview window to pop up. You can adjust the resolution of the live webcam to suit your needs, but keep in mind that higher resolutions may slow down the face swap process. Feel free to switch resolutions based on your computer's power and performance.
+EMBEDDING WEIGHT:
 
-No worries about the preview window size—you can resize it independently of the webcam resolution. Want to go full screen? You can make the preview window as large as you like without affecting the deep fake rendering. The rendering will stay smooth, no matter the size of your preview window. Enjoy seamless deep fake fun with complete control over your setup!  
+This is like how much importance we give to the face's unique features. Imagine each face has a special "fingerprint". This number tells us how much we care about matching these "fingerprints" when we're trying to track a face from one frame to the next.
+
+WEIGHT DISTRUBUTION:
+
+This is a way to adjust how much we care about the face's features compared to its position. If it's bigger, we care more about the features. If it's smaller, we care more about the position.
+
+POSITION WEIGHT:
+
+This is how much we care about where the face is in the picture. If a face doesn't move much between frames, it's probably the same face, right? This number tells us how important we think that is.
+
+OLD WEIGHT and NEW WEIGHT:
+
+When we're tracking a face over time, we don't want to forget what it looked like before, but we also want to update our idea of what it looks like now. OLD_WEIGHT is how much we remember about the face from before, and NEW_WEIGHT is how much we pay attention to what it looks like right now.
+
+How To Use Face Track Settings:
+
+iRoopDeepFaceCam is designed to track and swap faces with either one or two faces in focus. When swapping just one face, you can have more than two people on screen, and the tracked face should stay locked on the individual, no matter where they move. However, when swapping two faces, it's crucial to have only two people on screen for optimal face tracking. If there are more than two people, the third person should avoid crossing into the tracked individuals’ areas, as their face may unintentionally get swapped.
+
+Face detection occurs from either the left or right side of the frame. When tracking two faces, the first two detected on the left can switch sides, and the same applies for faces detected on the right. If there are more than two people, and multiple faces start switching sides, the face swap may become unstable, causing the swap to jump unexpectedly, as the system expects faces to be detected from either the left or right of the screen.
+
+Finding the right balance of people on screen and tracking conditions may require some trial and error to determine what works best for your situation!
 
 ## How do I use it?
 > Note: When you run this program for the first time, it will download some models ~300MB in size.
