@@ -672,18 +672,18 @@ def webcam_preview():
                 modules.globals.source_face_right_embedding=frame_processor.extract_face_embedding(source_image_right)
                 # print('face found in source image')
 
-    if modules.globals.target_path:
-        target_image_left = get_one_face_left(cv2.imread(modules.globals.target_path))
-        target_image_right = get_one_face_right(cv2.imread(modules.globals.target_path))
+    # if modules.globals.target_path:
+    #     target_image_left = get_one_face_left(cv2.imread(modules.globals.target_path))
+    #     target_image_right = get_one_face_right(cv2.imread(modules.globals.target_path))
     
-    if target_image_left is None:
-        print('No face found in target image')
-    else:
-        for frame_processor in frame_processors:
-            if hasattr(frame_processor, 'extract_face_embedding'):
-                modules.globals.target_face_left_embedding=frame_processor.extract_face_embedding(target_image_left)
-                modules.globals.target_face_right_embedding=frame_processor.extract_face_embedding(target_image_right)
-                # print('face found in target image')
+    # if target_image_left is None:
+    #     print('No face found in target image')
+    # else:
+    #     for frame_processor in frame_processors:
+    #         if hasattr(frame_processor, 'extract_face_embedding'):
+    #             modules.globals.target_face_left_embedding=frame_processor.extract_face_embedding(target_image_left)
+    #             modules.globals.target_face_right_embedding=frame_processor.extract_face_embedding(target_image_right)
+    #             # print('face found in target image')
 
 
     # FPS calculation variables
