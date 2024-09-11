@@ -637,6 +637,9 @@ def process_frame(source_face: List[Face], temp_frame: Frame) -> Frame:
     # Draw face boxes on the frame if enabled
     if modules.globals.show_target_face_box:
         temp_frame = face_analyser.draw_on(temp_frame, target_faces)
+        for face in target_faces:
+            temp_frame = draw_all_landmarks(temp_frame, face)
+
 
     # Return the processed frame
     return temp_frame
@@ -1267,6 +1270,43 @@ def generate_anatomical_landmarks(position):
         landmarks.append([x + 5 + i*5, y - 30])
 
     return np.array(landmarks, dtype=np.float32)
+
+def draw_all_landmarks(frame: Frame, face: Face) -> Frame:
+    if face.landmark_2d_106 is None:
+        return frame
+    
+    landmarks = face.landmark_2d_106.astype(np.int32)
+    
+    # Define colors for different parts of the face
+    colors = {
+        'face_outline': (255, 255, 255),  # White
+        'eyebrows': (0, 255, 0),          # Green
+        'nose': (0, 255, 255),            # Yellow
+        'eyes': (255, 0, 0),              # Blue
+        'mouth': (0, 0, 255)              # Red
+    }
+    
+    # Draw face outline (landmarks 0-33)
+    for i in range(33):
+        cv2.circle(frame, tuple(landmarks[i]), 1, colors['face_outline'], -1)
+    
+    # Draw eyebrows (landmarks 33-51)
+    for i in range(33, 52):
+        cv2.circle(frame, tuple(landmarks[i]), 1, colors['eyebrows'], -1)
+    
+    # Draw nose (landmarks 51-75)
+    for i in range(51, 76):
+        cv2.circle(frame, tuple(landmarks[i]), 1, colors['nose'], -1)
+    
+    # Draw eyes (landmarks 76-95)
+    for i in range(76, 96):
+        cv2.circle(frame, tuple(landmarks[i]), 1, colors['eyes'], -1)
+    
+    # Draw mouth (landmarks 96-105)
+    for i in range(96, 106):
+        cv2.circle(frame, tuple(landmarks[i]), 1, colors['mouth'], -1)
+    
+    return frame
 
 def apply_mouth_area_with_landmarks(temp_frame, mouth_cutout, mouth_box, face_mask, target_face):
     landmarks = target_face.landmark_2d_106

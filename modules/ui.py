@@ -125,7 +125,7 @@ def create_root(start: Callable[[], None], destroy: Callable[[], None]) -> ctk.C
     many_faces_switch.place(relx=0.03, rely=y_start + 7.1*y_increment, relwidth=0.8)
 
     show_target_face_box_var = ctk.BooleanVar(value=modules.globals.show_target_face_box)
-    show_target_face_box_switch = ctk.CTkSwitch(root, text='Show Target Face Box', variable=show_target_face_box_var, cursor='hand2',
+    show_target_face_box_switch = ctk.CTkSwitch(root, text='Show InsightFace Landmarks', variable=show_target_face_box_var, cursor='hand2',
                                     command=lambda: setattr(modules.globals, 'show_target_face_box', show_target_face_box_var.get()))
     show_target_face_box_switch.place(relx=0.03, rely=y_start + 7.8*y_increment, relwidth=0.8)
 
