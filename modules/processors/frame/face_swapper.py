@@ -1279,32 +1279,44 @@ def draw_all_landmarks(frame: Frame, face: Face) -> Frame:
     
     # Define colors for different parts of the face
     colors = {
-        'face_outline': (255, 255, 255),  # White
-        'eyebrows': (0, 255, 0),          # Green
-        'nose': (0, 255, 255),            # Yellow
-        'eyes': (255, 0, 0),              # Blue
-        'mouth': (0, 0, 255)              # Red
+        'face_outline': (255, 255, 255),    # White
+        'lefteye': (0, 255, 0),             # Green
+        'righteye': (0, 255, 0),            # Green
+        'eyebrows': (52, 213, 235),         # Cyan
+        'nose': (0, 255, 255),              # Yellow
+        'eyes': (0, 0, 255),                # Blue
+        'mouth': (255, 0, 0)                # Red
     }
+
     
     # Draw face outline (landmarks 0-33)
     for i in range(33):
         cv2.circle(frame, tuple(landmarks[i]), 1, colors['face_outline'], -1)
     
-    # Draw eyebrows (landmarks 33-51)
-    for i in range(33, 52):
+    # Right Eye (landmarks 33-43)
+    for i in range(33, 43):
+        cv2.circle(frame, tuple(landmarks[i]), 1, colors['righteye'], -1)
+
+    # Right Eyebrow (landmarks 43-52)
+    for i in range(43, 52):
         cv2.circle(frame, tuple(landmarks[i]), 1, colors['eyebrows'], -1)
     
-    # Draw nose (landmarks 51-75)
-    for i in range(51, 76):
-        cv2.circle(frame, tuple(landmarks[i]), 1, colors['nose'], -1)
-    
-    # Draw eyes (landmarks 76-95)
-    for i in range(76, 96):
-        cv2.circle(frame, tuple(landmarks[i]), 1, colors['eyes'], -1)
-    
-    # Draw mouth (landmarks 96-105)
-    for i in range(96, 106):
+    # mouth (landmarks 52-72)
+    for i in range(52, 72):
         cv2.circle(frame, tuple(landmarks[i]), 1, colors['mouth'], -1)
+
+    # nose (landmarks 72-87)
+    for i in range(72, 87):
+        cv2.circle(frame, tuple(landmarks[i]), 1, colors['nose'], -1)
+
+    # Left Eye (landmarks 87-97)
+    for i in range(87, 97):
+        cv2.circle(frame, tuple(landmarks[i]), 1, colors['lefteye'], -1)
+
+    # Left Eyebrow (landmarks 97-106)
+    for i in range(97, 106):
+        cv2.circle(frame, tuple(landmarks[i]), 1, colors['eyebrows'], -1)
+    
     
     return frame
 
