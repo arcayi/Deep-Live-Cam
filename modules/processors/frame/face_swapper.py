@@ -1282,10 +1282,10 @@ def draw_all_landmarks(frame: Frame, face: Face) -> Frame:
         'face_outline': (255, 255, 255),    # White
         'lefteye': (0, 255, 0),             # Green
         'righteye': (0, 255, 0),            # Green
-        'eyebrows': (52, 213, 235),         # Cyan
+        'eyebrows': (235, 213, 52),         # Cyan
         'nose': (0, 255, 255),              # Yellow
-        'eyes': (0, 0, 255),                # Blue
-        'mouth': (255, 0, 0)                # Red
+        'uppermouth': (0, 0, 255),          # Red
+        'lowermouth': (255, 150, 0)         # Blue
     }
 
     
@@ -1302,8 +1302,12 @@ def draw_all_landmarks(frame: Frame, face: Face) -> Frame:
         cv2.circle(frame, tuple(landmarks[i]), 1, colors['eyebrows'], -1)
     
     # mouth (landmarks 52-72)
-    for i in range(52, 72):
-        cv2.circle(frame, tuple(landmarks[i]), 1, colors['mouth'], -1)
+    for i in range(52, 62):
+        cv2.circle(frame, tuple(landmarks[i]), 1, colors['lowermouth'], -1)
+
+    # mouth (landmarks 52-72)
+    for i in range(62, 72):
+        cv2.circle(frame, tuple(landmarks[i]), 1, colors['uppermouth'], -1)
 
     # nose (landmarks 72-87)
     for i in range(72, 87):
