@@ -610,6 +610,11 @@ def update_preview(frame_number: int = 0) -> None:
             print('No face found in source image')
             return
         
+        if modules.globals.flip_x:
+            temp_frame = cv2.flip(temp_frame, 1)
+        if modules.globals.flip_y:
+            temp_frame = cv2.flip(temp_frame, 0)
+
         for frame_processor in get_frame_processors_modules(modules.globals.frame_processors):
             temp_frame = frame_processor.process_frame([source_image_left,source_image_right],
                 temp_frame

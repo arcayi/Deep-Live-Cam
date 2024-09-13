@@ -609,6 +609,10 @@ def process_frames(source_path: str, temp_frame_paths: List[str], progress: Any 
     for temp_frame_path in temp_frame_paths:
         temp_frame = cv2.imread(temp_frame_path)
         try:
+            if modules.globals.flip_x:
+                temp_frame = cv2.flip(temp_frame, 1)
+            if modules.globals.flip_y:
+                temp_frame = cv2.flip(temp_frame, 0)
             result = process_frame([source_image_left,source_image_right], temp_frame)
             cv2.imwrite(temp_frame_path, result)
         except Exception as exception:
@@ -629,6 +633,12 @@ def process_image(source_path: str, target_path: str, output_path: str) -> None:
 
     source_face = get_one_face(cv2.imread(source_path))
     target_frame = cv2.imread(target_path)
+
+    if modules.globals.flip_x:
+        target_frame = cv2.flip(target_frame, 1)
+    if modules.globals.flip_y:
+        target_frame = cv2.flip(target_frame, 0)
+
     result = process_frame([source_image_left,source_image_right], target_frame)
     cv2.imwrite(output_path, result)
 
