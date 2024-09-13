@@ -136,10 +136,15 @@ def create_root(start: Callable[[], None], destroy: Callable[[], None]) -> ctk.C
 
 
     # Right column of switches
-    live_mirror_var = ctk.BooleanVar(value=modules.globals.live_mirror)
-    live_mirror_switch = ctk.CTkSwitch(root, text='Live Webcam Mirror', variable=live_mirror_var, cursor='hand2',
-                                    command=lambda: setattr(modules.globals, 'live_mirror', live_mirror_var.get()))
-    live_mirror_switch.place(relx=0.55, rely=y_start + 5*y_increment, relwidth=0.4)
+    live_flip_x_var = ctk.BooleanVar(value=modules.globals.flip_x)
+    live_flip_x_vswitch = ctk.CTkSwitch(root, text='Flip X', variable=live_flip_x_var, cursor='hand2',
+                                    command=lambda: setattr(modules.globals, 'flip_x', live_flip_x_var.get()))
+    live_flip_x_vswitch.place(relx=0.55, rely=y_start + 5*y_increment, relwidth=0.2)
+
+    live_flip_y_var = ctk.BooleanVar(value=modules.globals.flip_y)
+    live_flip_y_switch = ctk.CTkSwitch(root, text='Flip Y', variable=live_flip_y_var, cursor='hand2',
+                                    command=lambda: setattr(modules.globals, 'flip_y', live_flip_y_var.get()))
+    live_flip_y_switch.place(relx=0.80, rely=y_start + 5*y_increment, relwidth=0.2)
 
     keep_fps_var = ctk.BooleanVar(value=modules.globals.keep_fps)
     keep_fps_switch = ctk.CTkSwitch(root, text='Keep fps', variable=keep_fps_var, cursor='hand2',
@@ -175,23 +180,23 @@ def create_root(start: Callable[[], None], destroy: Callable[[], None]) -> ctk.C
 
     # Mouth mask switch
     mouth_mask_var = ctk.BooleanVar(value=modules.globals.mouth_mask)
-    mouth_mask_switch = ctk.CTkSwitch(outline_frame, text='Mouth Mask | Feather, Height, Width ->', variable=mouth_mask_var, cursor='hand2',
+    mouth_mask_switch = ctk.CTkSwitch(outline_frame, text='Mouth Mask | Feather, Padding, Top ->', variable=mouth_mask_var, cursor='hand2',
                                     command=lambda: setattr(modules.globals, 'mouth_mask', mouth_mask_var.get()))
     mouth_mask_switch.place(relx=0.02, rely=0.5, relwidth=0.6, relheight=0.5, anchor="w")
 
     # Size dropdown (rightmost)
-    mask_size_var = ctk.StringVar(value="11")
-    mask_size_dropdown = ctk.CTkOptionMenu(outline_frame, values=["5","6","7","8","9","10","11","12","13","14","15","16","17","18","19","20"],
+    mask_size_var = ctk.StringVar(value="1")
+    mask_size_dropdown = ctk.CTkOptionMenu(outline_frame, values=["1","2","3","4","5","6","7","8","9","10","11","12","13","14","15","16","17","18","19","20"],
                                             variable=mask_size_var,
                                             command=mask_size)
     mask_size_dropdown.place(relx=0.98, rely=0.5, relwidth=0.1, anchor="e")
 
     # Down size dropdown
-    mask_down_size_var = ctk.StringVar(value="5")
-    mask_down_size_dropdown = ctk.CTkOptionMenu(outline_frame, values=["-15","-14","-13","-12","-11","-10","-9","-8","-7","-6","-5","-4","-3","-2","-1","1","2","3","4","5","6","7","8","9","10","11","12","13","14","15"],
+    mask_down_size_var = ctk.StringVar(value="0.50")
+    mask_down_size_dropdown = ctk.CTkOptionMenu(outline_frame, values=["0.01","0.02","0.03","0.04","0.05","0.06","0.07","0.08","0.09","0.10","0.15","0.20","0.25","0.30","0.35","0.40","0.45","0.50","0.55","0.60","0.65","0.70","0.75","0.80","0.85","0.90","0.95","1.00","1.25","1.50","1.75","2.00","2.25","2.50","2.75","3.00"],
                                             variable=mask_down_size_var,
                                             command=mask_down_size)
-    mask_down_size_dropdown.place(relx=0.87, rely=0.5, relwidth=0.1, anchor="e")
+    mask_down_size_dropdown.place(relx=0.87, rely=0.5, relwidth=0.12, anchor="e")
 
     # Feather ratio dropdown
     mask_feather_ratio_var = ctk.StringVar(value="8")
@@ -697,8 +702,10 @@ def webcam_preview():
             break
         temp_frame = frame.copy()
         
-        if modules.globals.live_mirror:
+        if modules.globals.flip_x:
             temp_frame = cv2.flip(temp_frame, 1)
+        if modules.globals.flip_y:
+            temp_frame = cv2.flip(temp_frame, 0)
         
         for frame_processor in frame_processors:
             temp_frame = frame_processor.process_frame([source_image_left, source_image_right], temp_frame)
@@ -832,7 +839,7 @@ def mask_size(*args):
 
 def mask_down_size(*args):
     size = mask_down_size_var.get()
-    modules.globals.mask_down_size = int(size)
+    modules.globals.mask_down_size = float(size)
 
 def mask_feather_ratio_size(*args):
     size = mask_feather_ratio_var.get()
