@@ -886,21 +886,24 @@ def draw_mouth_mask_visualization(frame: Frame, face: Face, mouth_mask_data: tup
         min_x, min_y = max(0, min_x), max(0, min_y)
         max_x, max_y = min(width, max_x), min(height, max_y)
 
-        # Adjust mask and color_mask to match the region size
+        # Adjust mask to match the region size
         mask_region = mask[0:max_y-min_y, 0:max_x-min_x]
-        color_mask = cv2.applyColorMap((mask_region * 255).astype(np.uint8), cv2.COLORMAP_JET)
+        
+        # Remove the color mask overlay
+        # color_mask = cv2.applyColorMap((mask_region * 255).astype(np.uint8), cv2.COLORMAP_JET)
 
-        # Ensure the shapes match before blending
+        # Ensure shapes match before blending
         vis_region = vis_frame[min_y:max_y, min_x:max_x]
-        if vis_region.shape[:2] == color_mask.shape[:2]:
-            blended = cv2.addWeighted(vis_region, 0.7, color_mask, 0.3, 0)
-            vis_frame[min_y:max_y, min_x:max_x] = blended
+        # Remove blending with color_mask
+        # if vis_region.shape[:2] == color_mask.shape[:2]:
+        #     blended = cv2.addWeighted(vis_region, 0.7, color_mask, 0.3, 0)
+        #     vis_frame[min_y:max_y, min_x:max_x] = blended
 
         # Draw the lower lip polygon
         cv2.polylines(vis_frame, [lower_lip_polygon], True, (0, 255, 0), 2)
 
-        # Show the region where the mouth area would be applied
-        cv2.rectangle(vis_frame, (min_x, min_y), (max_x, max_y), (0, 0, 255), 2)
+        # Remove the red box
+        # cv2.rectangle(vis_frame, (min_x, min_y), (max_x, max_y), (0, 0, 255), 2)
 
         # Visualize the feathered mask
         feather_amount = max(1, min(30, (max_x - min_x) // modules.globals.mask_feather_ratio, (max_y - min_y) // modules.globals.mask_feather_ratio))
@@ -908,12 +911,13 @@ def draw_mouth_mask_visualization(frame: Frame, face: Face, mouth_mask_data: tup
         kernel_size = 2 * feather_amount + 1
         feathered_mask = cv2.GaussianBlur(mask_region.astype(float), (kernel_size, kernel_size), 0)
         feathered_mask = (feathered_mask / feathered_mask.max() * 255).astype(np.uint8)
-        color_feathered_mask = cv2.applyColorMap(feathered_mask, cv2.COLORMAP_VIRIDIS)
+        # Remove the feathered mask color overlay
+        # color_feathered_mask = cv2.applyColorMap(feathered_mask, cv2.COLORMAP_VIRIDIS)
 
         # Ensure shapes match before blending feathered mask
-        if vis_region.shape == color_feathered_mask.shape:
-            blended_feathered = cv2.addWeighted(vis_region, 0.7, color_feathered_mask, 0.3, 0)
-            vis_frame[min_y:max_y, min_x:max_x] = blended_feathered
+        # if vis_region.shape == color_feathered_mask.shape:
+        #     blended_feathered = cv2.addWeighted(vis_region, 0.7, color_feathered_mask, 0.3, 0)
+        #     vis_frame[min_y:max_y, min_x:max_x] = blended_feathered
 
         # Add labels
         cv2.putText(vis_frame, "Lower Mouth Mask", (min_x, min_y-10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
