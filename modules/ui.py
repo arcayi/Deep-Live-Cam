@@ -423,6 +423,9 @@ def create_preview(parent: ctk.CTkToplevel) -> ctk.CTkToplevel:
     preview.protocol('WM_DELETE_WINDOW', lambda: toggle_preview())
     preview.resizable(width=True, height=True)
 
+    # Set the window to always stay on top
+    preview.attributes('-topmost', True)
+    
     preview_label = ctk.CTkLabel(preview, text=None)
     preview_label.pack(fill='both', expand=True)
 
