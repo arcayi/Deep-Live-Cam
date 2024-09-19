@@ -178,12 +178,24 @@ def create_root(start: Callable[[], None], destroy: Callable[[], None]) -> ctk.C
     outline_frame = ctk.CTkFrame(root, fg_color="transparent", border_width=1, border_color="grey")
     outline_frame.place(relx=0.02, rely=y_start + 9.3*y_increment, relwidth=0.96, relheight=0.05)
 
+   # Create a shared BooleanVar in modules.globals
+    if not hasattr(modules.globals, 'mouth_mask_var'):
+        modules.globals.mouth_mask_var = ctk.BooleanVar(value=modules.globals.mouth_mask)
+
     # Mouth mask switch
-    mouth_mask_var = ctk.BooleanVar(value=modules.globals.mouth_mask)
-    mouth_mask_switch = ctk.CTkSwitch(outline_frame, text='Mouth Mask | Feather, Padding, Top ->', variable=mouth_mask_var, cursor='hand2',
-                                    command=lambda: setattr(modules.globals, 'mouth_mask', mouth_mask_var.get()))
+    def toggle_mouthmask():
+        is_mouthmask = modules.globals.mouth_mask_var.get()
+        modules.globals.mouth_mask = is_mouthmask
+        if hasattr(modules.globals, 'mouth_mask_switch_preview'):
+            modules.globals.mouth_mask_switch_preview.select() if is_mouthmask else modules.globals.mouth_mask_switch_preview.deselect()
+
+    mouth_mask_switch = ctk.CTkSwitch(outline_frame, text='Mouth Mask | Feather, Padding, Top ->', 
+                                      variable=modules.globals.mouth_mask_var, cursor='hand2',
+                                      command=toggle_mouthmask)
     mouth_mask_switch.place(relx=0.02, rely=0.5, relwidth=0.6, relheight=0.5, anchor="w")
 
+    # Store the switch in modules.globals for access from create_preview
+    modules.globals.mouth_mask_switch_root = mouth_mask_switch
     # Size dropdown (rightmost)
     mask_size_var = ctk.StringVar(value="1")
     mask_size_dropdown = ctk.CTkOptionMenu(outline_frame, values=["1","2","3","4","5","6","7","8","9","10","11","12","13","14","15","16","17","18","19","20"],
@@ -414,7 +426,7 @@ def new_embedding_size(*args):
     modules.globals.new_embedding_weight  = float(size)
 
 def create_preview(parent: ctk.CTkToplevel) -> ctk.CTkToplevel:
-    global preview_label, preview_slider
+    global preview_label, preview_slider, topmost_switch, mouth_mask_switch_preview
 
     preview = ctk.CTkToplevel(parent)
     preview.withdraw()
@@ -423,11 +435,42 @@ def create_preview(parent: ctk.CTkToplevel) -> ctk.CTkToplevel:
     preview.protocol('WM_DELETE_WINDOW', lambda: toggle_preview())
     preview.resizable(width=True, height=True)
 
-    # Set the window to always stay on top
-    preview.attributes('-topmost', True)
-    
+    # Create a frame for the switches
+    switch_frame = ctk.CTkFrame(preview)
+    switch_frame.pack(fill='x', padx=10, pady=5)
+
+    # Add the "Stay on Top" switch
+    def toggle_topmost():
+        is_topmost = topmost_var.get()
+        preview.attributes('-topmost', is_topmost)
+        if is_topmost:
+            preview.lift()  # Bring window to front
+
+    topmost_var = ctk.BooleanVar(value=False)
+    topmost_switch = ctk.CTkSwitch(switch_frame, text='Stay on Top', variable=topmost_var, cursor='hand2',
+                                   command=toggle_topmost)
+    topmost_switch.pack(side='left', padx=5, pady=5)
+
+    # Initially set the window to stay on top
+    # preview.attributes('-topmost', True)
+
+    # Add the "Mouth Mask" switch
+    def toggle_mouthmask():
+        is_mouthmask = modules.globals.mouth_mask_var.get()
+        modules.globals.mouth_mask = is_mouthmask
+        if hasattr(modules.globals, 'mouth_mask_switch_root'):
+            modules.globals.mouth_mask_switch_root.select() if is_mouthmask else modules.globals.mouth_mask_switch_root.deselect()
+
+    mouth_mask_switch_preview = ctk.CTkSwitch(switch_frame, text='Mouth Mask', 
+                                              variable=modules.globals.mouth_mask_var, cursor='hand2',
+                                              command=toggle_mouthmask)
+    mouth_mask_switch_preview.pack(side='left', padx=5, pady=5)
+
+    # Store the switch in modules.globals for access from create_root
+    modules.globals.mouth_mask_switch_preview = mouth_mask_switch_preview
+
     preview_label = ctk.CTkLabel(preview, text=None)
-    preview_label.pack(fill='both', expand=True)
+    preview_label.pack(fill='y', expand=True)
 
     preview_slider = ctk.CTkSlider(preview, from_=0, to=0, command=lambda frame_value: update_preview(frame_value))
 
@@ -443,7 +486,7 @@ def update_tumbler(var: str, value: bool) -> None:
 def select_source_path() -> None:
     global RECENT_DIRECTORY_SOURCE, img_ft, vid_ft
 
-    PREVIEW.withdraw()
+    # PREVIEW.withdraw()
     source_path = ctk.filedialog.askopenfilename(title='select an source image', initialdir=RECENT_DIRECTORY_SOURCE, filetypes=[img_ft])
     if is_image(source_path):
         modules.globals.source_path = source_path
@@ -473,7 +516,7 @@ def swap_faces_paths() -> None:
     RECENT_DIRECTORY_SOURCE = os.path.dirname(modules.globals.source_path)
     RECENT_DIRECTORY_TARGET = os.path.dirname(modules.globals.target_path)
 
-    PREVIEW.withdraw()
+    # PREVIEW.withdraw()
 
     source_image = render_image_preview(modules.globals.source_path, (200, 200))
     source_label.configure(image=source_image)

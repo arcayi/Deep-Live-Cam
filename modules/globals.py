@@ -63,3 +63,5 @@ weight_distribution_size=1.00
 position_size = 0.40
 old_embedding_weight  = 0.90
 new_embedding_weight  = 0.10
+
+mouth_mask_switch_preview=None
