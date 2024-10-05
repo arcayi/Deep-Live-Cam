@@ -24,3 +24,8 @@ models/GFPGANv1.4.pth
 models/DMDNet.pth
 faceswap/
 .vscode/
+
+# arca
+*.deb
+*.whl
+models/.insightface/models/buffalo_l.zip
