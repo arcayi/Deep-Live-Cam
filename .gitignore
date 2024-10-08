@@ -22,4 +22,9 @@ models/inswapper_128.onnx
 models/GFPGANv1.4.pth
 *.onnx
 models/DMDNet.pth
+
+# arca
 docker/*.deb
+*.deb
+*.whl
+models/.insightface/models/buffalo_l.zip
