@@ -1,0 +1,86 @@
+# FROM nvidia/cuda:11.8.0-cudnn8-runtime-ubuntu20.04
+FROM nvcr.io/nvidia/cuda:11.8.0-cudnn8-runtime-ubuntu22.04
+# FROM nvcr.io/nvidia/pytorch:22.12-py3
+# FROM nvcr.io/nvidia/tritonserver:23.05-py3
+
+ENV APT_CACHE_DIR=/var/cache/buildkit/apt
+RUN mkdir -p $APT_CACHE_DIR
+ENV PIP_CACHE_DIR=/var/cache/buildkit/pip
+RUN mkdir -p $PIP_CACHE_DIR
+
+WORKDIR /app
+ARG DEBIAN_FRONTEND=noninteractive
+ARG NV_VER=560
+
+# 设置apt源，安装必要软件
+RUN sed -i -e 's/http\(s\)*:\(.*\)\/ubuntu/http:\/\/mirrors.ustc.edu.cn\/ubuntu/g' /etc/apt/sources.list
+
+# RUN add-apt-repository ppa:deadsnakes/ppa
+RUN  --mount=type=cache,target=$APT_CACHE_DIR \
+    apt update
+RUN  --mount=type=cache,target=$APT_CACHE_DIR \
+    apt -y install --no-install-recommends \
+    libgl1-mesa-glx libegl1-mesa libxrandr2 libxrandr2 libxss1 libxcursor1 \
+    libxcomposite1 libasound2 libxi6 libxtst6 curl ffmpeg git nano gnupg2 \
+    libsm6 wget unzip libxcb-icccm4 libxkbcommon-x11-0 libxcb-keysyms1 \
+    libxcb-icccm4 libxcb-render0 libxcb-render-util0 libxcb-image0 \
+    g++
+
+RUN  --mount=type=cache,target=$APT_CACHE_DIR \
+    apt -y install --no-install-recommends \
+    libnvidia-compute-$NV_VER
+
+RUN  --mount=type=cache,target=$APT_CACHE_DIR \
+    apt -y install --no-install-recommends \
+    python3-dev python-is-python3 python3-tk
+# RUN python -V
+RUN  --mount=type=cache,target=$APT_CACHE_DIR \
+    apt -y install --no-install-recommends \
+    python3-pip
+# COPY build/linux/get-pip.py /tmp
+# RUN python /tmp/get-pip.py
+# RUN pip -V
+
+# pip
+RUN pip config set global.index-url https://pypi.mirrors.ustc.edu.cn/simple/
+RUN pip config set --global install.trusted-host pypi.mirrors.ustc.edu.cn
+
+RUN  --mount=type=cache,target=$PIP_CACHE_DIR \
+    pip install --upgrade pip
+
+# # RUN git clone https://github.com/iperov/DeepFaceLive.git
+COPY requirements.txt Deep-Live-Cam/
+# COPY run.py Deep-Live-Cam/
+# COPY modules/ Deep-Live-Cam/
+
+RUN  --mount=type=cache,target=$PIP_CACHE_DIR \
+    pip install -i https://pypi.org/simple \
+        tb-nightly
+RUN  --mount=type=cache,target=$PIP_CACHE_DIR \
+    pip install -r Deep-Live-Cam/requirements.txt
+
+WORKDIR /app/Deep-Live-Cam
+
+# RUN apt -y install --no-install-recommends python3-tk
+# RUN pip uninstall  opencv opencv-python-headless
+
+# COPY docker/nv-tensorrt-local-repo-ubuntu2204-8.6.1-cuda-11.8_1.0-1_amd64.deb nv-tensorrt-local-repo-ubuntu2204-8.6.1-cuda-11.8_1.0-1_amd64.deb
+# RUN  --mount=type=cache,target=$PIP_CACHE_DIR \
+#     apt -y install --no-install-recommends \
+#     ./nv-tensorrt-local-repo-ubuntu2204-8.6.1-cuda-11.8_1.0-1_amd64.deb \
+#     && cp /var/nv-tensorrt-local-repo-ubuntu2204-8.6.1-cuda-11.8/nv-tensorrt-local-0628887B-keyring.gpg /usr/share/keyrings/
+
+RUN  --mount=type=cache,target=$APT_CACHE_DIR \
+    apt -y install --no-install-recommends \
+    python3-libnvinfer=8.6.1.6-1+cuda11.8 \
+    libnvinfer8=8.6.1.6-1+cuda11.8 \
+    libnvinfer-plugin8=8.6.1.6-1+cuda11.8 \
+    libnvinfer-vc-plugin8=8.6.1.6-1+cuda11.8 \
+    libnvparsers8=8.6.1.6-1+cuda11.8 \
+    libnvonnxparsers8=8.6.1.6-1+cuda11.8
+    
+    
+ENV LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/lib/x86_64-linux-gnu/:/usr/local/lib/python3.10/dist-packages/torch/lib/
+
+# COPY build/linux/example.sh example.sh
+CMD ["python","run.py","--execution-provider","tensorrt","--execution-threads","60","--max-memory","60"]
