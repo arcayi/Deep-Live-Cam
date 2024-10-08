@@ -1,0 +1,32 @@
+services:
+ iroopdeepfacecam-cuda:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.cuda
+      # command: [ 'python', 'facefusion.py', 'run', '--execution-providers', 'cuda' ]
+    volumes:
+      - /workspaces/:/workspaces/
+      - /workspaces/Face_AI/iRoopDeepFaceCam:/app/
+      - /workspaces/Face_AI/iRoopDeepFaceCam/models/:/app/models/
+      - /workspaces/Face_AI/iRoopDeepFaceCam/models/.insightface/:/root/.insightface/
+      - /tmp/.X11-unix:/tmp/.X11-unix
+      - /dev/video0:/dev/video0
+      # - /dev/video1:/dev/video1
+    # ports:
+    #   - 7870:7860
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              capabilities: [ gpu, video ]
+    network_mode: host
+    privileged: true
+    ipc: host
+    environment:
+      # 回显需要
+      - DISPLAY=${DISPLAY:-192.168.1.10:0.0}
+      # 设置时区
+      - TZ=Asia/Shanghai
+    tty: true
+    # command: ["tail","-F","/dev/null"]
